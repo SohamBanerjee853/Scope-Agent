@@ -253,11 +253,14 @@ def test_cross_process_updates_and_lock_release(repo):
     assert storage.load(repo)["counter"] == 45
 
 
-def test_lock_deadline_and_crashed_owner(repo):
-    code = "from scope.storage import project_lock; import sys,time;\nwith project_lock(sys.argv[1]):\n print('locked', flush=True)\n time.sleep(30)"
-    process = subprocess.Popen([sys.executable, "-c", code, str(repo)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+@pytest.mark.parametrize("ready_line", [b"locked\n", b"locked\r\n"], ids=["lf", "crlf"])
+def test_lock_deadline_and_crashed_owner(repo, ready_line):
+    code = ("from scope.storage import project_lock; import sys,time;\nwith project_lock(sys.argv[1]):\n"
+            f" sys.stdout.buffer.write({ready_line!r}); sys.stdout.flush()\n time.sleep(30)")
+    process = subprocess.Popen([sys.executable, "-c", code, str(repo)], stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, text=True, encoding="utf-8")
     try:
-        assert process.stdout.readline() == b"locked\n"
+        assert process.stdout.readline() == "locked\n"
         with pytest.raises(storage.StateError, match="lock"):
             with storage.project_lock(repo, timeout=0.05):
                 pytest.fail("held lock was acquired")
