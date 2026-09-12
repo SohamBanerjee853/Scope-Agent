@@ -47,7 +47,8 @@ class Watcher:
         self.closed = threading.Event()
         self._sessions = set()
         self.server = Server(self.handle, admission=self._admit,
-                             request_timeout=human_timeout, max_clients=max_clients)
+                             request_timeout=human_timeout, max_clients=max_clients,
+                             control_kinds=frozenset({"revoke", "shutdown"}))
 
     def _admit(self, message, context):
         with self.store.lock:

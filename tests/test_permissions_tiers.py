@@ -191,3 +191,17 @@ def test_classification_never_resolves_paths_or_starts_processes(shell, monkeypa
 @pytest.mark.parametrize("shell", ["cmd", "fish", "", "unrecognized-shell"])
 def test_unsupported_shell_cannot_auto_allow(shell):
     assert classify("pytest -q", "/workspace/project", shell).name != "T1"
+
+
+@pytest.mark.parametrize("command,expected", [
+    ("cat <> notes.txt", "T2"),
+    ("cat <> /tmp/scope-inert-review", "T3"),
+    ("cat <> ../scope-inert-review", "T3"),
+    ("cat 3<>/tmp/scope-inert-review", "T3"),
+    ("<> /tmp/scope-inert-review", "T3"),
+    ("cat '<>notes.txt'", "T1"),
+])
+def test_posix_readwrite_redirect_is_a_write_shape(command, expected):
+    # POSIX <> can create the file even when the command only reads its input.
+    # These strings are never executed; quoted operator text remains a filename.
+    assert classify(command, "/workspace/project", "posix").name == expected

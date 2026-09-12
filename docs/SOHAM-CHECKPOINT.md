@@ -1,6 +1,6 @@
 # Soham checkpoints
 
-The current milestone is S3, recorded below. S1 and S2 are historical evidence
+The permission-side handoff is S4, recorded below. S1 and S2 are historical evidence
 for handoff commits `54f39c769df4603e7bae8fb7b63d823657c15662` and
 `20b2024ff1e0609c1833d73e947eb2d4d0e762e2` respectively.
 
@@ -273,7 +273,7 @@ model SDK or remote approval engine was introduced. The linked event page return
 HTTP 403 when checked; event rules and sponsor claims were not independently
 verified in this milestone.
 
-## S3: installation, receipts and offline smoke
+## S3 (historical): installation, receipts and offline smoke
 
 Completed September 12, 2026 on `work/soham-permissions`, based on S2 commit
 `20b2024ff1e0609c1833d73e947eb2d4d0e762e2`. The commit containing this section is
@@ -431,3 +431,70 @@ and spending require later coordination. No sponsor dependency or SDK was added.
 Next: S4 permission-side review and final handoff. Arjun's understanding projection
 and the combined receipt remain I1 dependencies. Host launch cleanup, actual
 session registration and invocation-local Codex/Claude adapters remain I1L work.
+
+## S4: final permission-side review
+
+Reviewed September 12, 2026 on `work/soham-permissions`, after S3
+`f66d188160078942eeba57694abc7dcd163360a1`. This commit is the final S4 permission
+handoff; its full pushed SHA is recorded in the handoff and reconciliation
+checkpoint. Earlier S1 handoff: `54f39c769df4603e7bae8fb7b63d823657c15662`.
+Reconciliation into main follows S4. Soham owns A3 while Arjun works on A2. Those integration changes are separate from
+this owner-branch checkpoint.
+
+The review confirmed the strict allow/deny/empty-abstention envelope, T3 before
+grant lookup, final reclassification before human grant commit, finite atomic
+budgets, monotonic expiry, context binding and revocation generation checks.
+Questions carry human answers without granting permission, and the watcher never
+executes probes. Existing exact wire assertions remain unchanged.
+
+Two owned defects were fixed with focused regressions:
+
+- POSIX `<>` is a read/write redirection. The lexer now recognizes that operator
+  as one token and treats an outside-workspace target as T3; a local target stays
+  reviewable T2. Quoted literal text remains data.
+- A full normal worker pool could prevent revoke/shutdown from arriving while
+  approvals waited. Watcher now reserves one additional authenticated control
+  reader for those two operations. Its frame-read deadline is 0.5 seconds; other
+  kinds cannot enter handler/UI work through that slot. The default bound is
+  16 normal workers plus one control reader. Generic IPC Server retains its
+  original bound unless this option is enabled. Saturated once/grant/question
+  requests are cancelled by successful revoke/shutdown, and late answers cannot
+  authorize a response. This does not guarantee availability under socket flooding.
+
+Public CLI commands remain hook, stop, session-end, install, watch, propose,
+install-skill, receipt and smoke, with the options recorded in S2/S3 above.
+`ipc.exchange(message, timeout=105, *, home=None)` and all logical message fields
+in INTERFACES.md remain unchanged. The added Server control reader is an internal,
+opt-in transport option; no native wire or cross-owner callable changed.
+
+On macOS 14.8.4 / CPython 3.11.16 / uv 0.12.13, the final full suite passed:
+**969 passed, 0 skipped**, 15.48 seconds. Classifier table/review coverage is now
+**126 POSIX, 129 PowerShell and 4 unsupported-shell cases**. Added tests are six
+redirection regressions, six saturated cancellation cases and five overflow
+authentication/kind/bound cases. These are inert command strings or explicitly
+scripted local transport fixtures, not live shell commands or human approvals.
+
+`uv build` produced both archives. Rules remain 999 bytes (allow.yaml) and 1,333
+bytes (hard-ask.yaml); the permission skill remains 3,345 bytes. Installed-resource
+inspection and both offline smoke dialects passed. Each smoke observed four
+requests, two allows, one grant and one synthetic hard ask, with revocation before
+the remaining budget was spent and cleanup of its isolated homes. Both local
+planning guides are absent from the wheel and source archive.
+
+One shared packaging change is proposed for reconciliation: add `/scripts` to
+the source-distribution include list so both tracked smoke wrapper files ship
+there. The installed Python smoke CLI and wheel resources already work. S4 did
+not modify shared packaging or any Arjun module to imply integration.
+
+Classifier limits remain lexical: executable contents, aliases, shell profiles,
+filesystem links and the behavior inside recognized test tools are not inspected.
+The host's sandbox, executable resolution and native approval policy remain
+authoritative. Native answers, actual execution, managed/plugin hook coverage,
+human understanding and timing savings are never inferred from fixture allows.
+
+Native Windows hook execution, ACL/console behavior, live host trust, actual
+PermissionRequest interception and real-human review remain unverified. No global
+hooks, model calls, services or sponsor SDKs were added. The optional Exa guidance
+proposal stays deferred while the explicitly requested A3/reconciliation proceeds.
+Arjun's available A1 projection and the missing A2 interfaces must be assessed on
+the integration branch; A2 consent and observation behavior is not claimed here.
