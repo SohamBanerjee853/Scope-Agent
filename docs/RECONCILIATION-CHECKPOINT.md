@@ -166,3 +166,10 @@ The installed payment check also passed with injected parent host IDs and Git/
 pytest selectors, and refused an editable install. Hosted results are pending
 at this checkpoint and will be linked in the handoff. A2/A3-dependent commands,
 the full scripted rehearsal, launchers and live human/model checks remain pending.
+
+Hosted run [34707907439](https://github.com/SohamBanerjee853/Scope-Agent/actions/runs/34707907439)
+passed macOS. Windows exposed two existing nonregular-file simulations whose
+constructed stat records have no native file-attribute value. The installer now
+rejects nonregular files before inspecting Windows reparse metadata; regular
+reparse files are still refused. No fixture or rejection assertion was weakened.
+The full corrected local suite passed **1,256 tests, 0 skipped**, in 54.98 seconds.

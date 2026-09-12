@@ -129,10 +129,10 @@ def _read(path: Path, limit: int) -> bytes | None:
         initial = path.lstat()
     except FileNotFoundError:
         return None
-    if getattr(initial, "st_file_attributes", 0) & 0x400:
-        raise ValueError(f"refusing a reparse-point configuration or skill: {path}")
     if not stat.S_ISREG(initial.st_mode):
         raise ValueError(f"configuration or skill must be a regular file: {path}")
+    if getattr(initial, "st_file_attributes", 0) & 0x400:
+        raise ValueError(f"refusing a reparse-point configuration or skill: {path}")
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
     try:
         descriptor = os.open(path, flags)
