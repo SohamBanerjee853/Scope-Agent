@@ -191,7 +191,7 @@ def test_watcher_observes_actual_owner_process_loss_and_finalizes(project, tmp_p
     try:
         assert owner.stdout.readline().strip() == "owned"
         with ThreadPoolExecutor(1) as pool:
-            pending = pool.submit(watch.main, ["--owner-home", str(home)])
+            pending = pool.submit(watch.main, ["--plain", "--owner-home", str(home)])
             deadline = time.monotonic() + 3
             while ipc.exchange({"kind": "ping"}, timeout=0.1) != {"ready": True}:
                 assert time.monotonic() < deadline

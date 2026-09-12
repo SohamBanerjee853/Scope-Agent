@@ -325,7 +325,7 @@ def test_lazy_automatic_path_has_no_ui_or_model_imports():
         "status=main(['hook']); "
         "assert status == 0; "
         "assert not any(name.split('.')[0] in "
-        "{'rich','openai','anthropic','litellm'} for name in sys.modules); "
+        "{'rich','prompt_toolkit','openai','anthropic','litellm'} for name in sys.modules); "
         "assert not any(name in sys.modules for name in "
         "['scope.watch','scope.watch_ui','scope.grants','scope.ipc'])"
     )

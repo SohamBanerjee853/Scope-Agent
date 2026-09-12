@@ -36,6 +36,10 @@ Scope uses the person's current coding agent, without another model API key. It
 preserves the host's sandbox, approval settings and normal hook trust.
 `scope codex` and `scope claude` open the agent and review panes in one terminal
 using tmux. A manual two-terminal option supports environments without tmux.
+The review pane shows an inbox, readable command cards and labeled answer fields.
+Press F2 to review a waiting request, use Tab and Enter to navigate, and open
+Details for supporting evidence. Prediction, running a probe and granting a
+command scope each have their own decision. Ctrl-r revokes; Esc cancels a form.
 Each launch keeps its own records and uses the host's actual startup identity.
 Readiness distinguishes a connected host, reachable review and observed requests.
 The review process ends with its owner and revokes pending decisions. An

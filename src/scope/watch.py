@@ -3,6 +3,7 @@
 import argparse
 import os
 from pathlib import Path
+import sys
 import threading
 import time
 import uuid
@@ -33,6 +34,7 @@ class _ReviewContext:
         self.generation = generation
         self.deadline = min(transport.deadline, time.monotonic() + owner.human_timeout)
         self.session_id = None
+        self.presentation = None
 
     def active(self):
         return (time.monotonic() < self.deadline and not self.owner.closed.is_set()
@@ -169,7 +171,7 @@ class Watcher:
                 "ping": ({"kind"}, set()),
                 "proposal": ({"kind", "session_id", "cwd", "card"}, {"agent_id"}),
                 "request": ({"kind", "request"}, {"request_id"}),
-                "question": ({"kind", "repo", "context", "prompt"}, {"session_id"}),
+                "question": ({"kind", "repo", "context", "prompt"}, {"session_id", "presentation"}),
                 "notice": ({"kind", "message"}, set()),
                 "revoke": ({"kind"}, set()),
                 "stop": ({"kind"}, {"session_id"}),
@@ -215,6 +217,10 @@ class Watcher:
                 if not isinstance(context_text, str) or len(context_text) > 16384:
                     raise ValueError("invalid question context")
                 prompt = _text(message["prompt"])
+                if "presentation" in message:
+                    from .review_presentation import validate
+
+                    review_context.presentation = validate(message["presentation"], repo)
                 answer = self._ask("question", (repo, context_text, prompt), review_context)
                 with self.store.lock:
                     if not review_context.active() or not isinstance(answer, str) or len(answer) > 16384:
@@ -335,10 +341,12 @@ class Watcher:
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="scope watch", description=__doc__)
     parser.add_argument("--owner-home", type=Path, help="private run whose owner lifetime controls this watcher")
+    parser.add_argument("--plain", action="store_true", help="use the line-oriented review interface with tagged replies")
     args = parser.parse_args(argv)
     ui = TerminalUI()
     watcher = None
     owner_home = None
+    use_tui = False
     try:
         if args.owner_home is not None:
             from . import host_session, launch
@@ -348,17 +356,27 @@ def main(argv=None):
             os.environ.update(SCOPE_HOME=str(owner_home), SCOPE_LAUNCH_ID=config["launch_id"],
                               SCOPE_HOST=config["host"], SCOPE_POPUP="0")
             os.environ.pop("CODEX_THREAD_ID", None)
+        use_tui = not args.plain and ui.interactive and os.environ.get("TERM") != "dumb"
+        if use_tui:
+            from .review_tui import ReviewUI
+
+            ui = ReviewUI()
         watcher = Watcher(ui)
         watcher.start()
         transport = "local authenticated TCP and run mailbox" if watcher.launch else "local authenticated TCP"
-        ui.notice(f"Scope review is listening on {transport}. Ctrl-C revokes scopes and stops this watcher.")
+        if use_tui:
+            host = watcher.launch["host"].title() if watcher.launch else "your coding agent"
+            ui.notice(f"Review pane ready for {host}.")
+        else:
+            ui.notice(f"Scope review is listening on {transport}. Ctrl-C revokes scopes and stops this watcher.")
         if not ui.interactive:
             ui.notice("No interactive terminal: human decisions will abstain and questions will return unavailable.")
         started = time.monotonic()
-        while not watcher.closed.wait(0.1):
-            if owner_home is not None:
+
+        def owner_tick():
+            if owner_home is not None and not watcher.closed.is_set():
                 if launch.owner_alive(owner_home):
-                    continue
+                    return
                 if launch.owner_started(owner_home) or time.monotonic() - started >= 30:
                     ui.notice("The launch owner has ended or did not become available; revoking this run's scopes.")
                     watcher.close()
@@ -369,12 +387,17 @@ def main(argv=None):
                         from . import receipt
 
                         receipt.write(state["session_id"], home=owner_home, host=state["host"])
-                    break
+        if use_tui:
+            ui.run(watcher, owner_tick=owner_tick, on_revoke=watcher._revoke)
+        else:
+            while not watcher.closed.wait(0.1):
+                owner_tick()
         return 0
     except KeyboardInterrupt:
         return 0
     except Exception:
-        ui.notice("Scope watcher could not start or continue. Check for another watcher and private SCOPE_HOME permissions.")
+        error_ui = TerminalUI(output_stream=sys.stderr) if use_tui else ui
+        error_ui.notice("Scope watcher could not start or continue. Check for another watcher and private SCOPE_HOME permissions.")
         return 1
     finally:
         if watcher is not None:

@@ -21,6 +21,11 @@ push, history rewrite or destructive reset. Work in integration/scope for shared
 reconciliation, test it, then merge normally into main when the requested scope
 is ready. No global hooks, authenticated live/model sessions or sponsor spending.
 
+The interface work covers the watcher TUI, optional typed question
+presentation, UI adapters, terminal fixtures and related docs on integration/scope.
+Use the terminal input library only on the interactive watcher path. Preserve A2,
+wire decisions and cancellation guards. Show actual captured terminal results.
+
 ## Safety and evidence
 
 1. Abstain means empty hook stdout and exit 0. Errors never allow; deny is JSON,

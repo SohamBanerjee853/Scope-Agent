@@ -102,6 +102,16 @@ the owned review pane and prints the session's receipt replay command. A crashed
 owner releases its OS lifetime lock; review then revokes pending decisions and
 records the inferred exit separately from any native SessionEnd.
 
+The review pane has an inbox, readable permission cards and separate prediction
+and consent forms. Press F2 to open the waiting request, Tab to move between
+fields and actions, and Enter to activate the focused choice. F3 shows details;
+Page Up/Down scrolls long commands and evidence. F4 changes a prediction's value
+type. Esc cancels the current form. Ctrl-r revokes scopes and
+pending answers; Ctrl-c stops review. Requests never open an affirmative action
+automatically, and a cancelled form cannot submit a later request.
+On Mac keyboards that use function keys for media controls, hold Fn for F2–F4;
+Fn-Up/Down supplies Page Up/Down.
+
 Native Windows uses two manually opened terminals:
 
 ```powershell
@@ -211,11 +221,16 @@ uv run scope next TASK_ID --smaller "Inspect how retry_key changes across attemp
 ```
 
 Keep `scope watch` open in a separate interactive terminal using the same
-SCOPE_HOME. Its tagged prediction prompt expects a JSON object with `value`, a
-nonempty `reason`, and optional `assistance`; enter your own prediction. The
-separate consent prompt accepts literal `true` or `false`. A transport reply or
-an explanation never supplies consent. The next-task prompt accepts `smaller`,
-`larger` when offered, or `defer`.
+SCOPE_HOME. Enter your prediction and its type, your reasoning, and any assistance
+in the labeled fields, then save it. The next form separately offers to run the
+displayed probe once or decline. A transport reply or explanation never supplies
+consent. Next-task review offers the complete smaller or larger instruction and
+the option to defer.
+
+`scope watch --plain` retains the original line-oriented interface with tagged
+replies for terminals that need it. In that mode prediction answers are JSON
+objects with `value`, `reason`, and optional `assistance`; consent is `true` or
+`false`. Redirected input never supplies human decisions in either mode.
 
 Checks return the saved task/session identity and the actual engine record.
 `matched` and `mismatched` both represent an observed comparison; neither proves

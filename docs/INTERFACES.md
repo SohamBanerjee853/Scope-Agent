@@ -135,7 +135,7 @@ The following describes logical bodies before transport token/nonce fields:
 | ping | none | ready boolean |
 | proposal | session_id, optional agent_id, cwd, card | accepted boolean |
 | request | request: original PermissionRequest object; optional internal request_id | behavior: allow, deny or null (abstain); optional message |
-| question | repo, context and prompt strings; launched callers also supply native session_id | answer string, or error |
+| question | repo, context and prompt strings; optional validated presentation; launched callers also supply native session_id | answer string, or error |
 | notice | message string | received boolean |
 | revoke | none; clears all watcher grants/proposals and pending answers | revoked boolean |
 | stop | optional session_id | received boolean |
@@ -158,6 +158,16 @@ Questions return a human answer or explicit error; absence is never fabricated.
 Use a roughly 95-second human deadline inside the 105-second caller deadline.
 Disconnects/timeouts/revocation must invalidate pending answers. Do not let a late
 answer approve a later request. A noninteractive watcher refuses human decisions.
+
+The default interactive watcher uses a persistent terminal application with an
+inbox and generation-bound forms. Opening a request is an explicit action;
+completing or cancelling it returns to the inbox. Keyboard events and callbacks
+from one form cannot submit the next. Permission choices and separate probe
+consent have no affirmative default. `watch --plain` retains tagged line input.
+The optional version-1 presentation object supplies bounded typed display data
+for prediction, probe approval and next-task forms. It cannot supply answers,
+default approvals or provenance. Its execution directory must match the outer
+question repository. Responses and A2 prediction/consent parsing are unchanged.
 
 The watcher MUST NOT execute commands received through this channel. Arjun's probe
 runs in the calling process through the bounded runner after separate consent.

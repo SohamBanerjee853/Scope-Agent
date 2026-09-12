@@ -142,14 +142,38 @@ def request_text(request: dict) -> str:
 
 
 def show_request(request: dict) -> None:
-    """A2 display callback; safe on stderr while CLI stdout remains JSON."""
+    """Keep the agent pane concise; complete requests live in the review pane."""
     try:
-        text = request_text(request)
+        request_text(request)  # The legacy display must still fit exactly.
     except ValueError as error:
         show("Review unavailable: " + str(error))
         raise
-    for line in text.split("\n"):
-        show(line)
+    kind = request["kind"]
+    messages = {
+        "prediction": "Scope is asking for your prediction in the review pane.",
+        "probe_approval": "Prediction saved. Review the separate one-probe consent in Scope.",
+        "next_task": "Choose the next action in Scope's review pane.",
+    }
+    if kind in messages:
+        show(messages[kind])
+        return
+    observation = request["observation"]
+    status = display_text(observation.get("status", "not_verified"))
+    line = "Observed status: " + status
+    if "actual" in observation:
+        value = _json_text(observation["actual"])
+        if len(value) > 240:
+            value = value[:240] + "... [full value: scope knowledge --json]"
+        line += "; " + display_text(observation.get("field", "result")) + " = " + value
+    reason = display_text(observation.get("reason", ""))
+    if len(reason) > 400:
+        reason = reason[:400] + "... [details: scope knowledge --json]"
+    # Every dynamic component is already escaped exactly once; re-escaping a
+    # JSON value would turn readable objects into backslash-heavy JSON strings.
+    for rendered in (line, reason):
+        if rendered:
+            sys.stderr.write(rendered + "\n")
+    sys.stderr.flush()
 
 
 def answer_request(request: dict):
@@ -165,7 +189,10 @@ def answer_request(request: dict):
     if kind not in prompts:
         return None
     context = request_text(request)
-    reply = ask(prompts[kind], repo=request["repo"], context=context)
+    from .review_presentation import from_request
+
+    presentation = from_request(request, request["repo"])
+    reply = ask(prompts[kind], repo=request["repo"], context=context, presentation=presentation)
     if (not isinstance(reply, dict) or set(reply) != {"answer", "provenance"}
             or reply.get("provenance") != "human_ipc" or not isinstance(reply.get("answer"), str)):
         show("Human reviewer unavailable or answer cancelled; no answer or consent will be supplied. Start scope watch in an interactive terminal for a fresh request.")
@@ -196,7 +223,7 @@ def _text(value, *, maximum=MAX_TEXT, nonempty=True):
     return value
 
 
-def ask(prompt: str, *, repo: str, context: str = "", home=None,
+def ask(prompt: str, *, repo: str, context: str = "", home=None, presentation=None,
         timeout: float = 105, input_stream=None, output_stream=None,
         exchange: Callable | None = None, cancelled: threading.Event | None = None) -> dict:
     """Return {answer, provenance}, or an explicit error; never invent absence.
@@ -213,6 +240,8 @@ def ask(prompt: str, *, repo: str, context: str = "", home=None,
     pending question promptly. An injected ``exchange`` is a trusted test seam:
     ``human_ipc`` describes the route, not proof of human authorship. Scripted
     engine adapters must separately label their answer provenance ``test_fixture``.
+    Optional ``presentation`` supplies bounded typed form data. It never changes
+    the canonical answer string or supplies defaults, consent or provenance.
     """
     try:
         _text(repo, maximum=4096)
@@ -231,6 +260,10 @@ def ask(prompt: str, *, repo: str, context: str = "", home=None,
         else:
             transport = exchange
         message = {"kind": "question", "repo": repo, "context": context, "prompt": prompt}
+        if presentation is not None:
+            from .review_presentation import validate
+
+            message["presentation"] = validate(presentation, repo)
         launch_session = None
         if "SCOPE_LAUNCH_ID" in os.environ or "SCOPE_HOST" in os.environ:
             from . import host_session, learning, repository

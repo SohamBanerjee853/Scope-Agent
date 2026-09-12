@@ -276,7 +276,8 @@ def test_prediction_adapter_preserves_real_typed_values(value, monkeypatch):
                                    {"answer": "true", "provenance": "human_ipc", "approved": True}])
 def test_stage_adapter_never_converts_transport_success_into_consent(reply, monkeypatch):
     request = prediction_request()
-    request.update(kind="probe_approval", classification={"name": "T2"}, prediction={})
+    request.update(kind="probe_approval", classification={"name": "T2", "reason": "Fixture local probe"},
+                   prediction={"value": 2, "reason": "Fixture prediction", "assistance": ""})
     monkeypatch.setattr(ui, "ask", lambda *args, **kwargs: reply)
     assert ui.answer_request(request) is None
 
@@ -309,7 +310,8 @@ def test_command_and_instruction_that_cannot_fit_never_ask_for_a_truncated_choic
     request = prediction_request()
     request["kind"] = kind
     if kind == "probe_approval":
-        request.update(classification={"name": "T2"}, prediction={})
+        request.update(classification={"name": "T2", "reason": "Fixture local probe"},
+                       prediction={"value": 2, "reason": "Fixture prediction", "assistance": ""})
         request["spec"]["argv"] = ["probe", "x" * 17000]
     else:
         request["options"] = {"smaller": "理解" * 2000, "defer": None}
