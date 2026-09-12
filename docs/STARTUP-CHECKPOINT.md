@@ -99,9 +99,10 @@ file fallback, disconnected clients, cross-transport nonce replay, saturation,
 late answers, native identity mismatch, source mutation after closure, receipt
 isolation and known host exit status through a receipt-write failure.
 
-Final local validation used a fresh locked noneditable install:
+Final local validation used a refreshed locked noneditable install, with all 45
+installed package files compared byte-for-byte against the source:
 
-- `UV_NO_EDITABLE=1 uv run pytest -q`: **1,744 passed, 0 skipped, 226.14 seconds**.
+- `UV_NO_EDITABLE=1 uv run pytest -q`: **1,747 passed, 0 skipped, 217.70 seconds**.
 - `uv build`: source distribution and wheel built successfully.
 - Installed `scripts/check-package.py`: package provenance, resources, receipt
   projection and both permission dialect smokes passed.
@@ -114,10 +115,14 @@ Final local validation used a fresh locked noneditable install:
   harness and checkpoint. Private contributor filenames are absent from tracked
   content and both package archives.
 
-The integration commit starts the macOS/Windows hosted checks. Those jobs are
-pending at this checkpoint's commit; their actual completed results must be
-reviewed before advancing main. Native startup and human acceptance below remain
-separate even if both CI jobs pass.
+The first hosted run exposed a timing assumption in the mailbox timeout test and
+double escaping in printed Windows replay commands. The test now synchronizes on
+handler admission before expiring its caller deadline; command output preserves
+shell quoting while rejecting terminal controls. The verification command also
+forces a package refresh after source edits to avoid reusing an older local wheel.
+The corrected integration commit starts new macOS/Windows hosted checks. Their
+actual completed results must be reviewed before advancing main. Native startup
+and human acceptance below remain separate even if both CI jobs pass.
 
 ## Remaining human and platform checks
 

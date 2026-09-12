@@ -224,8 +224,9 @@ use `paths.session_log()` rather than constructing filenames.
 `log.read(session_id)` returns a list of records shaped as
 `{"ts": "UTC ISO-8601", "event": "name", "fields": {}}`. Workflow event attributes
 belong inside `fields`; they cannot overwrite the timestamp or event name.
-Readers skip malformed records and an unterminated final line. Cross-process
-workflow ordering and bounded receipt reads remain later milestone work.
+Readers skip malformed records and an unterminated final line. Receipt projection
+uses bounded event reads and reports incomplete input; receipt writers serialize
+through an OS lock. Log records alone do not establish cross-process causal order.
 
 Feature modules expose `main(argv) -> int | None`. `learning_cli` receives the
 command name first for all its routes; `launch` does likewise. `install-skill`

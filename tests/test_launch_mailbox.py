@@ -178,8 +178,19 @@ def test_replay_memory_capacity_fails_closed_without_eviction(launch, monkeypatc
 
 
 def test_client_timeout_invalidates_context_and_removes_artifacts(launch, monkeypatch):
-    entered, cancelled = threading.Event(), threading.Event()
+    entered, cancelled, expire_client = threading.Event(), threading.Event(), threading.Event()
     contexts = []
+    caller = {}
+
+    def caller_clock():
+        # Expire only the file client's deadline after real handler admission.
+        # The server retains its real clock and must cancel via the lost lease.
+        advanced = threading.get_ident() == caller.get("ident") and expire_client.is_set()
+        return time.monotonic() + (106 if advanced else 0)
+
+    def request():
+        caller["ident"] = threading.get_ident()
+        return ipc.exchange({"kind": "question"}, timeout=30)
 
     def handler(message, context):
         contexts.append(context)
@@ -189,10 +200,18 @@ def test_client_timeout_invalidates_context_and_removes_artifacts(launch, monkey
         cancelled.set()
         return {"behavior": "allow"}
 
-    with ipc.Server(handler, home=launch["home"], launch_id=launch["launch_id"]) as server:
+    monkeypatch.setattr(mailbox, "time", SimpleNamespace(monotonic=caller_clock, sleep=time.sleep))
+    with ipc.Server(handler, home=launch["home"], launch_id=launch["launch_id"]) as server, ThreadPoolExecutor(1) as pool:
         block_connect(monkeypatch)
-        assert ipc.exchange({"kind": "question"}, timeout=0.15) is None
-        assert entered.is_set() and cancelled.wait(1)
+        future = pool.submit(request)
+        try:
+            assert entered.wait(5), "real mailbox request was not admitted"
+            assert contexts[0].active() and not future.done()
+        finally:
+            expire_client.set()
+        assert future.result(timeout=2) is None
+        assert cancelled.wait(2)
+        assert time.monotonic() < contexts[0].deadline
         assert contexts[0].delivered is False
         assert sorted(path.name for path in server._mailbox.directory.iterdir()) == ["admission.lock"]
 

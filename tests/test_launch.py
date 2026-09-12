@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import tomllib
@@ -111,6 +112,37 @@ def test_powershell_hook_formatter_quotes_literal_paths_and_codex_keeps_both_dia
     claude = launch.hook_groups("claude", executable, windows=True)["PermissionRequest"][0]["hooks"][0]
     assert claude["shell"] == "powershell" and claude["command"].startswith("& '")
     assert "commandWindows" not in claude
+
+
+def test_printed_powershell_replay_preserves_exact_windows_paths_and_quotes(capsys):
+    result = {"exit_code": 7, "session_id": "fixture-session", "receipt_available": True,
+              "home": r"\\server\share\review λ"}
+    launch._print_exit(result, r"C:\Program Files\O'Brien\scope.exe", windows=True)
+    assert capsys.readouterr().out.splitlines() == [
+        "Scope host exit: 7",
+        r"Receipt: & 'C:\Program Files\O''Brien\scope.exe' 'receipt' 'fixture-session' '--home' '\\server\share\review λ'",
+    ]
+
+
+def test_printed_posix_replay_roundtrips_exact_arguments(capsys):
+    executable = "/fixture/space ' and \\\" λ/scope"
+    home = "/fixture/run ' and \\\" λ"
+    result = {"exit_code": 0, "session_id": "fixture-session", "receipt_available": True, "home": home}
+    launch._print_exit(result, executable, windows=False)
+    command = capsys.readouterr().out.splitlines()[1].removeprefix("Receipt: ")
+    assert shlex.split(command) == [executable, "receipt", "fixture-session", "--home", home]
+
+
+def test_command_display_rejects_terminal_controls_without_escaping_printable_paths(capsys):
+    for control in ("\x1b", "\x9b", "\u202e"):
+        with pytest.raises(ValueError, match="control characters"):
+            launch._quote(["scope", control])
+        result = {"exit_code": 7, "session_id": "fixture" + control, "receipt_available": True,
+                  "home": "C:\\fixture\\run" + control}
+        launch._print_exit(result, "scope", windows=True)
+        output = capsys.readouterr().out
+        assert control not in output and "Receipt: " not in output
+        assert "Receipt saved" in output and "C:\\fixture\\run" in output
 
 
 def test_nested_claude_parent_identity_is_preserved_without_environment_session_markers(project):

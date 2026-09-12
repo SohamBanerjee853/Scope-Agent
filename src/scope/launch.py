@@ -25,7 +25,7 @@ _EVENTS = ("SessionStart", "PermissionRequest", "Stop", "SessionEnd")
 
 
 def _text(value, maximum=32768):
-    if not isinstance(value, str) or not value or len(value) > maximum or any(ord(c) < 32 or ord(c) == 127 for c in value):
+    if not isinstance(value, str) or not value or len(value) > maximum or not value.isprintable():
         raise ValueError("launcher arguments must be bounded literal text without control characters")
     value.encode("utf-8")
     return value
@@ -38,6 +38,12 @@ def _quote(argv, *, windows=False):
             raise ValueError("PowerShell argument contains unsupported alternate quotes")
         return "& " + " ".join("'" + item.replace("'", "''") + "'" for item in argv)
     return shlex.join(argv)
+
+
+def _literal_display(value):
+    """Keep printable path text exact; make terminal controls visible."""
+    return "".join(char if char.isprintable() else json.dumps(char, ensure_ascii=True)[1:-1]
+                   for char in str(value))
 
 
 def hook_groups(host, executable, *, permissions=True, windows=None):
@@ -449,18 +455,25 @@ def _finalize(home, launch, code, *, host_started):
     return result
 
 
-def _print_exit(result, executable):
-    from .watch_ui import display_text
+def _print_exit(result, executable, *, windows=None):
+    windows = os.name == "nt" if windows is None else windows
     print("Scope host exit: " + str(result["exit_code"]))
     if result.get("session_id") and result.get("receipt_available"):
-        print("Receipt: " + display_text(_quote([executable, "receipt", result["session_id"],
-                                                "--home", result["home"]], windows=os.name == "nt")))
+        try:
+            command = _quote([executable, "receipt", result["session_id"], "--home", result["home"]], windows=windows)
+        except ValueError:
+            print("Receipt saved; a copyable replay command is unavailable for this path or identity.")
+            print("Run records: " + _literal_display(result["home"]))
+        else:
+            # Shell quoting already preserves literal argv. JSON-escaping this
+            # string again would change Windows backslashes and quoted paths.
+            print("Receipt: " + command)
     elif not result.get("session_id") and result.get("native_state_available"):
         print("No native SessionStart was registered; no session receipt or permission interception is claimed.")
     elif not result.get("session_id"):
         print("Native startup evidence unavailable; no session receipt is claimed.")
     else:
-        print("Receipt unavailable. Run records: " + display_text(result["home"]))
+        print("Receipt unavailable. Run records: " + _literal_display(result["home"]))
 
 
 def _wait_host(process, home):
@@ -602,13 +615,12 @@ def open_panes(home, plan):
 
 def start(plan):
     home, launch = prepare_launch(plan)
-    from .watch_ui import display_text
-    print("Scope run: " + display_text(str(home)), flush=True)
+    print("Scope run: " + _literal_display(home), flush=True)
     if plan["host"] == "codex":
         print("Codex first use: review /hooks, trust the exact definitions, then restart if required. Native SessionStart occurs at the first task.", flush=True)
     if plan["manual_watch"]:
-        print("In your review terminal run: " + display_text(_quote([plan["scope_executable"], "watch", "--owner-home", str(home)],
-                                                                  windows=os.name == "nt")), flush=True)
+        print("In your review terminal run: " + _quote([plan["scope_executable"], "watch", "--owner-home", str(home)],
+                                                      windows=os.name == "nt"), flush=True)
         return run_agent(home)
     try:
         panes = open_panes(home, plan)
@@ -619,7 +631,7 @@ def start(plan):
         raise
     print("Agent left; review right. Ctrl-b then arrow switches panes; Ctrl-b d detaches without stopping the launch.", flush=True)
     if panes["server"]:
-        print("Reattach: " + display_text(_quote([plan["tmux_executable"], "-L", panes["server"], "attach-session", "-t", panes["server"]])), flush=True)
+        print("Reattach: " + _quote([plan["tmux_executable"], "-L", panes["server"], "attach-session", "-t", panes["server"]]), flush=True)
         try:
             _tmux(["attach-session", "-t", panes["server"]], executable=plan["tmux_executable"], server=panes["server"], capture=False)
         except ValueError:

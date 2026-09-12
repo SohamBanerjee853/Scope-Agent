@@ -24,7 +24,7 @@ smoke:
 	$(SCOPE_SMOKE)
 
 check-installed:
-	uv sync --locked --no-editable
+	uv sync --locked --no-editable --reinstall-package scope-agent
 	uv run --no-sync python -I scripts/check-package.py
 	uv run --no-sync python -I scripts/check-demo.py
 

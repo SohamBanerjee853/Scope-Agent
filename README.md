@@ -91,6 +91,10 @@ hook occurs when the first task starts. The host receives guidance to run
 reachable human review, and permission status: disabled, configured/waiting, or
 requests observed. An open pane or a configured hook proves no interception.
 
+Claude's sandbox network prompts can bypass `PermissionRequest`. Scope does not
+audit Claude's native rules or transcript, so those decisions remain unknown in
+its receipt; the host's own restrictions still apply.
+
 Use Ctrl-b then an arrow to switch panes. Ctrl-b then d detaches without ending
 the launch; use the printed reattach command. When launched inside tmux, Scope
 creates its own window and preserves existing windows. Normal host exit closes
@@ -277,12 +281,13 @@ uv build
 To verify the installed distribution rather than editable source imports:
 
 ```text
-uv sync --locked --no-editable
+uv sync --locked --no-editable --reinstall-package scope-agent
 uv run --no-sync python -I scripts/check-package.py
 uv run --no-sync python -I scripts/check-demo.py
 ```
 
-The first check validates resources and the permission smoke. The second prepares
+The reinstall refreshes the local package after source edits. The first check
+validates resources and the permission smoke. The second prepares
 a disposable payment project through the installed CLI, observes the real bug and
 the exact stable-key repair, and checks actual regression outcomes. It exercises
 A1 task checkpoints, then the combined A2/A3 rehearsal for both shell dialects.
