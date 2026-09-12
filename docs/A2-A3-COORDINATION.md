@@ -6,6 +6,12 @@ The published Arjun tip inspected for this integration is
 or A2's callable signatures. Integration waits on missing signatures while completing independent portions. This document is
 coordination status, not a newly imposed A2 API.
 
+Arjun subsequently published `6e5a6795f389b14eb09180fa960f6eff07e2a8f7` with
+[A2-PREPARATION.md](A2-PREPARATION.md), proposed check/compare/choose_next/dispatch
+signatures and three fixture tests. It explicitly waits for this main merge
+before A2 implementation. These proposed boundaries inform the next adapter work;
+they do not yet supply a callable engine or final callback/result schemas.
+
 ## Available A3 work
 
 - learning_cli.py calls the existing learning.start/checkpoint/knowledge APIs.

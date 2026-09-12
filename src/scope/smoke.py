@@ -19,6 +19,12 @@ _PYTHON_ENTRY = "import sys; from scope.cli import main; raise SystemExit(main(s
 _WORKER_ENTRY = "from scope.smoke import _worker_main; raise SystemExit(_worker_main())"
 _SHELLS = ("posix", "powershell")
 _HOMES = {"SCOPE_HOME": "scope", "CODEX_HOME": "codex", "CLAUDE_CONFIG_DIR": "claude"}
+_STAGES = frozenset({
+    "context", "imports", "classification", "initial_log", "watcher_start", "ping", "proposal",
+    "grant_hook_1", "grant_hook_2", "grant_wire_1", "grant_wire_2", "reuse", "budget_log",
+    "revoke", "revoked_hook", "revoked_wire", "hard_ask_classification", "hard_ask_hook",
+    "hard_ask_wire", "watcher_close", "session_end", "workspace_check", "receipt_write", "receipt_counts",
+})
 
 
 def plan(shell: str, *, live: bool = False) -> dict:
@@ -87,7 +93,10 @@ def run(shell: str = "posix") -> dict:
         raise ValueError("unsupported smoke shell")
     session = "demo-smoke-" + str(uuid.uuid4())
     with tempfile.TemporaryDirectory(prefix="scope-smoke-") as temporary:
-        root = Path(temporary)
+        # Resolve only this newly created, owned directory. Windows TEMP may
+        # contain an 8.3 alias such as RUNNER~1, which is deliberately outside
+        # the classifier's literal-path grammar. Never loosen that grammar.
+        root = Path(temporary).resolve(strict=True)
         workspace = root / "workspace"
         workspace.mkdir()
         for name in _HOMES.values():
@@ -102,7 +111,10 @@ def run(shell: str = "posix") -> dict:
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise RuntimeError("offline smoke worker could not complete") from exc
         if completed.returncode != 0:
-            raise RuntimeError("offline smoke fixture failed; no live host was launched")
+            stage = next((stage for stage in _STAGES if completed.stderr.strip() ==
+                          f"scope smoke: isolated fixture verification failed [{stage}]"), None)
+            detail = f" [{stage}]" if stage is not None else ""
+            raise RuntimeError(f"offline smoke fixture failed{detail}; no live host was launched")
         try:
             report = json.loads(completed.stdout)
         except (ValueError, UnicodeError) as exc:
@@ -151,7 +163,8 @@ def _hook(payload: dict, *, route: str = "hook") -> dict:
     return {"stdout": completed.stdout, "exit_code": completed.returncode}
 
 
-def _fixture(root: Path, session: str, shell: str) -> dict:
+def _fixture(root: Path, session: str, shell: str, *, progress=lambda stage: None) -> dict:
+    progress("imports")
     from . import ipc, log, receipt
     from .tiers import classify
     from .watch import Watcher
@@ -169,44 +182,64 @@ def _fixture(root: Path, session: str, shell: str) -> dict:
                 "tool_input": {"command": command, "shell": shell,
                                "description": "SCRIPTED FIXTURE request; never executed"}}
 
+    progress("classification")
     _require(all(classify(command, cwd, shell).name == "T2" for command in commands),
              "fixture commands must require a T2 decision")
+    progress("initial_log")
     log.append(session, "smoke_fixture_start", scripted=True, shell=shell,
                human_answers=False, requested_command_execution=False)
     ui = _ScriptedUI()
     results = []
+    progress("watcher_start")
     with Watcher(ui, human_timeout=3) as watcher:
+        progress("ping")
         _require(ipc.exchange({"kind": "ping"}, timeout=3) == {"ready": True},
                  "isolated watcher is unavailable")
         proposal = {"kind": "proposal", "session_id": session, "cwd": cwd, "card": card}
+        progress("proposal")
         _require(ipc.exchange(proposal, timeout=3) == {"accepted": True}, "fixture proposal was refused")
-        for command in commands:
+        for index, command in enumerate(commands, 1):
+            progress(f"grant_hook_{index}")
             result = _hook(payload(command))
+            progress(f"grant_wire_{index}")
             _require(result["stdout"] == _ALLOW, "grant request did not produce exact allow bytes")
             results.append({"label": "matching_t2", "command": command, "tier": "T2", **result})
+        progress("reuse")
         _require(len(ui.reviews) == 1, "second request did not reuse the fixture grant")
+        progress("budget_log")
         decision_events = [event["fields"] for event in log.read(session)
                            if event["event"] == "permission_review_decision"]
         _require([event.get("remaining") for event in decision_events] == [2, 1],
                  "grant consumption did not leave one unused budget unit")
+        progress("revoke")
         _require(ipc.exchange({"kind": "revoke"}, timeout=3) == {"revoked": True}, "revocation failed")
         _require(watcher.store.sessions() == (), "revocation retained a grant or proposal")
+        progress("revoked_hook")
         revoked = _hook(payload(commands[0]))
+        progress("revoked_wire")
         _require(revoked["stdout"] == "", "revoked request reused permission")
         results.append({"label": "after_revoke", "command": commands[0], "tier": "T2", **revoked})
         dangerous = "git push origin main"
+        progress("hard_ask_classification")
         _require(classify(dangerous, cwd, shell).name == "T3", "synthetic git push was not T3")
+        progress("hard_ask_hook")
         hard_ask = _hook(payload(dangerous))
+        progress("hard_ask_wire")
         _require(hard_ask["stdout"] == "", "synthetic T3 request did not abstain")
         results.append({"label": "synthetic_hard_ask", "command": dangerous, "tier": "T3", **hard_ask})
         _require(len(ui.reviews) == 2, "hard ask reached the fixture approval UI")
+        progress("watcher_close")
 
+    progress("session_end")
     ended = _hook({"hook_event_name": "SessionEnd", "session_id": session,
                    "cwd": cwd, "reason": "other"}, route="session-end")
     _require(ended["stdout"] == "", "SessionEnd emitted a permission decision")
+    progress("workspace_check")
     _require(not list(workspace.iterdir()), "requested fixture commands unexpectedly wrote files")
     log.append(session, "smoke_fixture_complete", scripted=True, requested_command_execution=False)
+    progress("receipt_write")
     document = receipt.write(session, home=root / "scope")
+    progress("receipt_counts")
     _require(document.get("counts") == {"requests": 4, "auto_allowed": 2, "allowed_once": 0,
                                       "denied": 0, "hard_asks": 1, "scopes_granted": 1},
              "receipt counts do not match observed hook decisions")
@@ -222,6 +255,14 @@ def _fixture(root: Path, session: str, shell: str) -> dict:
 
 def _worker_main() -> int:
     """Private child entry point; the public CLI always creates its own homes."""
+    stage = "context"
+
+    def progress(value):
+        nonlocal stage
+        if value not in _STAGES:
+            raise RuntimeError("unsupported fixture stage")
+        stage = value
+
     try:
         root = Path(os.environ["_SCOPE_SMOKE_ROOT"])
         session = os.environ["_SCOPE_SMOKE_SESSION"]
@@ -234,10 +275,10 @@ def _worker_main() -> int:
                  "fixture homes must remain isolated")
         _require("CODEX_THREAD_ID" not in os.environ and "SCOPE_LAUNCH_ID" not in os.environ,
                  "inherited host identity is forbidden")
-        print(json.dumps(_fixture(root, session, shell), ensure_ascii=True, allow_nan=False))
+        print(json.dumps(_fixture(root, session, shell, progress=progress), ensure_ascii=True, allow_nan=False))
         return 0
     except Exception:
-        print("scope smoke: isolated fixture verification failed", file=sys.stderr)
+        print(f"scope smoke: isolated fixture verification failed [{stage}]", file=sys.stderr)
         return 1
 
 

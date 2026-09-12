@@ -205,3 +205,27 @@ original files from `54f39c769df4603e7bae8fb7b63d823657c15662`, including Soham'
 Native Windows and a real human debugging session remain unverified. After the
 checks passed, Arjun explicitly authorized committing and pushing `arjun_branch`.
 That supersedes the earlier no-push instruction. No merge into `main` is authorized.
+
+## Pre-merge A2 preparation
+
+Arjun requested useful preparation while Soham merges both branches into `main`.
+[A2-PREPARATION.md](A2-PREPARATION.md) records proposed interfaces, debugging
+interactions, recovery behavior and acceptance cases. Added reusable offline
+test assets for lost-acknowledgment retries, a JSON probe and a regression. Three
+new tests verify the duplicate-charge bug, a stable-order-key repair, and rejection
+of an incorrect constant key that breaks distinct orders.
+
+The full local suite passed **179 tests, 0 skipped** on Python 3.14.7 (20.14 seconds)
+and Python 3.11.16 (19.51 seconds). Build and artifact-byte checks passed.
+An isolated exact-S4 overlay at `20d6ce03ecfbf792b9515c0088e9ae5326de3928` passed
+**1,106 tests, 0 skipped** before the three new fixture tests were added. All 55
+original S4 files were preserved. Actual dual-stream output replay and 16 inert
+classification examples also passed; the preparation brief records their limits.
+
+An earlier draft incorrectly attributed a 128 KiB per-record limit to Soham's
+receipts. S3/S4 have a 32 MiB total-log/receipt limit; direct inspection and actual
+full-output replay confirmed no proposed receipt-size fix was needed.
+
+At verification, `origin/main` remained F0 `3d6144c`. No production modules or
+shared contracts changed, and no A2 workflow or CLI was implemented. Pull the
+merged main into `arjun_branch` before starting A2, per Arjun's sequence.

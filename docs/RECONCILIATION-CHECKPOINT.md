@@ -14,6 +14,12 @@ uses normal merge commits with unrelated histories explicitly allowed. Neither
 feature branch is rewritten or deleted; both tested tips must be ancestors of
 the final main merge.
 
+Before the main merge, Arjun published preparation tip
+`6e5a6795f389b14eb09180fa960f6eff07e2a8f7`. It adds an A2 implementation brief
+and three independent fake-payment fixture tests, without changing production
+modules. That tip is also merged with history preserved. His brief explicitly
+waits for main reconciliation before implementing the proposed A2 APIs.
+
 The published main foundation is the canonical nested `{ts,event,fields}` event
 schema, safe session-/sha256- filenames, lazy CLI dispatch and missing-feature
 exit code 1. Arjun's five production modules work against those APIs unchanged;
@@ -78,5 +84,18 @@ projection and both permission smoke dialects. Its actual payment probe observed
 two charges before the repair and one after. The source archive now contains the
 POSIX/PowerShell wrapper twins with only the intended package files.
 
-Hosted CI is pending at this commit. Its completed run evidence will be reported
-with the final merge; this local result does not claim native Windows execution.
+Hosted run [34706044344](https://github.com/SohamBanerjee853/Scope-Agent/actions/runs/34706044344)
+passed all 1,229 tests, package checks and smoke wrappers on macOS. Windows found
+a host-dependent absolute-path check in the installer, Unix-only newline
+assumptions in tests, oversized pytest IDs exceeding Windows environment limits,
+and two isolated smoke failures. The installer now parses both path grammars
+independently of the host. Tests preserve literal skill bytes and normalize only
+the fake child's readiness-line terminator; long IDs use bounded hashed labels.
+The smoke fixture resolves its newly owned temporary directory to avoid Windows
+8.3 aliases, and reports only static allowlisted failure stages. Exact permission
+wire assertions remain unchanged. Native CI must verify the smoke fix.
+
+After those fixes and Arjun's preparation merge, the full local suite passed
+**1,241 tests, 0 skipped**, in 51.94 seconds, and both package archives built.
+The next hosted run remains pending at this commit. Completed evidence will be
+recorded with the main merge; local execution does not establish Windows support.

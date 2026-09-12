@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+from contextlib import contextmanager
 import socket
 import subprocess
 import uuid
@@ -108,6 +109,56 @@ def test_every_rehearsal_gets_a_fresh_session(monkeypatch):
     smoke.run("posix")
     smoke.run("posix")
     assert len(set(sessions)) == 2
+
+
+def test_generated_temporary_alias_is_resolved_before_constructing_fixture_paths(tmp_path, monkeypatch):
+    alias = tmp_path / "PROFILE~1" / "scope-smoke-owned"
+    canonical = tmp_path / "long-profile-name" / "scope-smoke-owned"
+    canonical.mkdir(parents=True)
+    actual_resolve = Path.resolve
+    resolved = []
+
+    @contextmanager
+    def owned_alias(**kwargs):
+        yield str(alias)
+
+    def resolve(path, *, strict=False):
+        if path == alias:
+            resolved.append(strict)
+            return canonical
+        return actual_resolve(path, strict=strict)
+
+    def worker(command, **options):
+        assert options["cwd"] == canonical / "workspace"
+        assert options["env"]["SCOPE_HOME"] == str(canonical / "scope")
+        assert options["env"]["_SCOPE_SMOKE_ROOT"] == str(canonical)
+        return subprocess.CompletedProcess(command, 0, json.dumps({
+            "mode": "scripted_fixture", "verified": True, "shell": "posix",
+            "session_id": options["env"]["_SCOPE_SMOKE_SESSION"],
+        }), "")
+
+    monkeypatch.setattr(smoke.tempfile, "TemporaryDirectory", owned_alias)
+    monkeypatch.setattr(Path, "resolve", resolve)
+    monkeypatch.setattr(subprocess, "run", worker)
+    smoke.run("posix")
+    assert resolved == [True]
+
+
+@pytest.mark.parametrize("diagnostic,expected_stage", [
+    ("scope smoke: isolated fixture verification failed [classification]\n", "classification"),
+    ("scope smoke: isolated fixture verification failed [private-token]\n", None),
+    ("private environment contents", None),
+])
+def test_worker_failure_exposes_only_allowlisted_static_stage_codes(diagnostic, expected_stage, monkeypatch):
+    monkeypatch.setattr(subprocess, "run", lambda command, **options:
+                        subprocess.CompletedProcess(command, 1, "", diagnostic))
+    with pytest.raises(RuntimeError) as failure:
+        smoke.run()
+    assert "private" not in str(failure.value)
+    if expected_stage:
+        assert f"[{expected_stage}]" in str(failure.value)
+    else:
+        assert "[" not in str(failure.value)
 
 
 @pytest.mark.parametrize("failure", ["timeout", "exit", "invalid-json", "wrong-session"])

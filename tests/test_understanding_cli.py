@@ -339,20 +339,23 @@ def test_skill_installs_exact_packaged_utf8_once_and_dry_run_writes_nothing(tmp_
     report = learning_cli.install_skill(project)
     target = project / ".agents" / "skills" / "scope-understand" / "SKILL.md"
     assert report["target"] == str(target)
-    assert target.read_text(encoding="utf-8") == learning_cli.skill_text()
+    # Compare exact installed/package bytes; read_text normalizes checkout CRLF.
+    assert target.read_bytes() == learning_cli.skill_text().encode("utf-8")
     before = target.stat().st_mtime_ns
     assert learning_cli.install_skill(project)["changed"] is False
     assert target.stat().st_mtime_ns == before
 
 
-def test_skill_preserves_local_edits_and_does_not_offer_force(repo):
+@pytest.mark.parametrize("line_ending", [b"\n", b"\r\n"], ids=["lf", "crlf"])
+def test_skill_preserves_local_edits_and_does_not_offer_force(repo, line_ending):
     learning_cli.install_skill(repo)
     target = repo / ".agents" / "skills" / "scope-understand" / "SKILL.md"
-    target.write_text("local edits\n", encoding="utf-8")
+    original = b"local edits" + line_ending
+    target.write_bytes(original)
     for dry_run in (False, True):
         with pytest.raises(ValueError, match="local edits"):
             learning_cli.install_skill(repo, dry_run=dry_run)
-        assert target.read_bytes() == b"local edits\n"
+        assert target.read_bytes() == original
 
 
 @pytest.mark.parametrize("component", [".agents", ".agents/skills", ".agents/skills/scope-understand"])

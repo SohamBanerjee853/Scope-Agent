@@ -14,6 +14,7 @@ import math
 import ntpath
 import os
 from pathlib import Path
+import posixpath
 import re
 import shlex
 import stat
@@ -57,8 +58,10 @@ def hook_command(executable: str | Path, subcommand: str, *, shell: str = "posix
     if drive.startswith("\\\\"):
         parts = drive[2:].replace("/", "\\").split("\\")
         windows_absolute = windows_absolute and len(parts) == 2 and all(parts)
+    # This formatter emits both shell dialects on every OS. Native Path would
+    # reinterpret a POSIX absolute path as drive-relative when running on Windows.
     if (not value or any(ord(char) < 32 or ord(char) == 127 for char in value)
-            or not (Path(value).is_absolute() or windows_absolute)):
+            or not (posixpath.isabs(value) or windows_absolute)):
         raise ValueError("hook executable must be a literal absolute path")
     value.encode("utf-8", errors="strict")
     if subcommand not in {"hook", "stop", "session-end"}:

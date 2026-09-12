@@ -257,7 +257,8 @@ def test_lock_deadline_and_crashed_owner(repo):
     code = "from scope.storage import project_lock; import sys,time;\nwith project_lock(sys.argv[1]):\n print('locked', flush=True)\n time.sleep(30)"
     process = subprocess.Popen([sys.executable, "-c", code, str(repo)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        assert process.stdout.readline() == b"locked\n"
+        # This fake child's print uses the native console newline on Windows.
+        assert process.stdout.readline().replace(b"\r\n", b"\n") == b"locked\n"
         with pytest.raises(storage.StateError, match="lock"):
             with storage.project_lock(repo, timeout=0.05):
                 pytest.fail("held lock was acquired")

@@ -3,7 +3,7 @@
 from importlib.resources import files
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import shlex
 import stat
 import sysconfig
@@ -52,6 +52,21 @@ def test_shell_specific_paths_with_spaces_and_apostrophes(shell, executable, exp
     assert command == expected
     if shell == "posix":
         assert shlex.split(command) == [executable, "hook", "--abstain"]
+
+
+@pytest.mark.parametrize("native_path", [PurePosixPath, PureWindowsPath])
+@pytest.mark.parametrize("shell", ["posix", "powershell"])
+def test_hook_path_grammar_is_independent_of_native_os(native_path, shell, monkeypatch):
+    monkeypatch.setattr(install, "Path", native_path)
+    for executable in ("/opt/Scope env/scope", "C:\\Scope env\\scope.exe", "\\\\server\\share\\scope.exe"):
+        command = install.hook_command(executable, "hook", shell=shell)
+        if shell == "posix":
+            assert shlex.split(command) == [executable, "hook"]
+        else:
+            assert command == f"& '{executable}' 'hook'"
+    for executable in ("scope", "C:scope", "\\rooted\\scope.exe"):
+        with pytest.raises(ValueError, match="absolute path"):
+            install.hook_command(executable, "hook", shell=shell)
 
 
 @pytest.mark.parametrize("shell", ["posix", "powershell"])
