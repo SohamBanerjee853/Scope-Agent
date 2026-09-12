@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "reads": {
+    "pwd": [],
+    "ls": ["-l", "-a", "-la", "-al", "-h", "-lh", "-lah", "--all"],
+    "cat": ["-n", "-b", "--number"],
+    "head": [],
+    "tail": [],
+    "wc": ["-l", "-w", "-c"],
+    "grep": ["-n", "-r", "-R", "-i", "-l", "-q", "-F", "-E"],
+    "rg": ["-n", "-i", "-l", "-q", "-F", "--files"],
+    "get-content": ["-raw"],
+    "get-childitem": ["-name", "-force", "-recurse"],
+    "get-location": []
+  },
+  "tests": ["-q", "-qq", "-v", "-vv", "-x", "--quiet", "--verbose", "--disable-warnings", "--collect-only", "--strict-markers", "--strict-config"],
+  "git_reads": {
+    "status": ["--short", "-s", "--branch", "-b", "--porcelain", "--porcelain=v1", "--porcelain=v2"],
+    "diff": ["--stat", "--name-only", "--name-status", "--cached", "--staged", "--check", "--no-ext-diff", "--no-textconv"],
+    "log": ["--oneline", "--stat", "--name-only", "--no-decorate", "--all"],
+    "show": ["--stat", "--name-only", "--oneline", "--no-ext-diff", "--no-textconv"]
+  }
+}

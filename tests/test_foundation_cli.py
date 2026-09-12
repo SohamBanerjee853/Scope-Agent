@@ -28,7 +28,11 @@ def test_help_lists_frozen_commands_without_feature_imports():
 
 
 @pytest.mark.parametrize("command", COMMANDS)
-def test_absent_commands_fail_clearly(command, capsys):
+def test_absent_commands_fail_clearly(command, capsys, monkeypatch):
+    # Exercise absence independently of which feature milestones are installed.
+    def missing(name):
+        raise ModuleNotFoundError(name=name)
+    monkeypatch.setattr(cli.importlib, "import_module", missing)
     assert cli.main([command]) == 1
     output = capsys.readouterr()
     assert output.out == ""
