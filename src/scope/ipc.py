@@ -28,6 +28,7 @@ from scope.paths import scope_home
 
 MAX_FRAME = 128 * 1024
 MAX_ENDPOINT = 4096
+CONTROL_FRAME_TIMEOUT = 0.5
 ENDPOINT_NAME = "watch.json"
 LOCK_NAME = "watch.lock"
 _TOKEN = re.compile(r"[0-9a-f]{64}\Z")
@@ -222,7 +223,11 @@ class Server:
     """Single-instance listener with a bounded number of daemon workers.
 
     The worker bound includes clients still sending a frame. There is no work
-    queue. The accept backlog is bounded too; excess clients are closed. A handler
+    queue. An opt-in control reader permits one additional authenticated revoke
+    or shutdown when normal workers are full; its frame read is capped at 0.5 s.
+    Other bodies never reach the handler through that reader. This preserves
+    cancellation during ordinary saturation, not availability against flooding.
+    The accept backlog is bounded too; excess clients are closed. A handler
     must poll Context.active() while awaiting its UI and before mutating grants.
     close() cancels contexts without waiting for an uncooperative human reader.
     """
@@ -230,19 +235,24 @@ class Server:
     def __init__(self, handler: Callable[[dict[str, Any], Context], dict[str, Any]], *,
                  home: str | os.PathLike[str] | None = None,
                  request_timeout: float = 95, max_clients: int = 16,
-                 admission: Callable[[dict[str, Any], Context], Any] | None = None):
+                 admission: Callable[[dict[str, Any], Context], Any] | None = None,
+                 control_kinds: frozenset[str] = frozenset()):
         if (isinstance(request_timeout, bool)
                 or not isinstance(request_timeout, (int, float))
                 or not math.isfinite(request_timeout) or not 0 < request_timeout <= 95):
             raise ValueError("request_timeout must be in (0, 95]")
         if type(max_clients) is not int or not 1 <= max_clients <= 128:
             raise ValueError("max_clients must be an integer in [1, 128]")
+        if (not isinstance(control_kinds, (set, frozenset))
+                or not control_kinds <= {"revoke", "shutdown"}):
+            raise ValueError("overflow controls may only be revoke or shutdown")
         self.handler = handler
         self.admission = admission
         self.home = _home(home)
         self.endpoint_path = self.home / ENDPOINT_NAME
         self.request_timeout = request_timeout
         self.max_clients = max_clients
+        self.control_kinds = frozenset(control_kinds)
         self.address: tuple[str, int] | None = None
         self._token = secrets.token_hex(32)
         self._lock_fd: int | None = None
@@ -252,6 +262,7 @@ class Server:
         self._mutex = threading.RLock()
         self._contexts: set[Context] = set()
         self._slots = threading.BoundedSemaphore(max_clients)
+        self._control_slot = threading.BoundedSemaphore(1)
 
     def start(self) -> Server:
         with self._mutex:
@@ -313,27 +324,35 @@ class Server:
             except OSError:
                 return
             started_at = time.monotonic()
-            if peer[0] != "127.0.0.1" or not self._slots.acquire(blocking=False):
+            if peer[0] != "127.0.0.1":
                 client.close()
                 continue
-            context = Context(started_at + self.request_timeout, started_at, "",
+            slot, control_only = self._slots, False
+            if not slot.acquire(blocking=False):
+                slot, control_only = self._control_slot, True
+                if not self.control_kinds or not slot.acquire(blocking=False):
+                    client.close()
+                    continue
+            timeout = min(self.request_timeout, CONTROL_FRAME_TIMEOUT) if control_only else self.request_timeout
+            context = Context(started_at + timeout, started_at, "",
                               _socket=client)
             with self._mutex:
                 if self._closed.is_set():
                     client.close()
-                    self._slots.release()
+                    slot.release()
                     return
                 self._contexts.add(context)
             try:
-                threading.Thread(target=self._handle, args=(client, context),
+                threading.Thread(target=self._handle, args=(client, context, slot, control_only),
                                  name="scope-ipc-client", daemon=True).start()
             except Exception:
                 client.close()
                 with self._mutex:
                     self._contexts.discard(context)
-                self._slots.release()
+                slot.release()
 
-    def _handle(self, client: socket.socket, context: Context) -> None:
+    def _handle(self, client: socket.socket, context: Context,
+                slot: threading.BoundedSemaphore, control_only: bool) -> None:
         try:
             message = _receive(client, context.deadline, context.cancelled)
             token, nonce = message.pop("token", None), message.pop("nonce", None)
@@ -343,6 +362,12 @@ class Server:
                     or not context.active()):
                 return
             context.nonce = nonce
+            if control_only:
+                if message.get("kind") not in self.control_kinds:
+                    return
+                # The shorter deadline bounds frame readers, not authenticated
+                # cancellation work. No control reader ever waits for human UI.
+                context.deadline = context.started_at + self.request_timeout
             if self.admission is not None:
                 context.state = self.admission(message, context)
             if not context.active():
@@ -375,7 +400,7 @@ class Server:
             client.close()
             with self._mutex:
                 self._contexts.discard(context)
-            self._slots.release()
+            slot.release()
             if context.after_reply is not None:
                 try:
                     context.after_reply()

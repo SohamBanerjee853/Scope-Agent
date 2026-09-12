@@ -341,3 +341,45 @@ def test_grant_committed_then_cancelled_before_send_is_rolled_back():
     events = log.read("scripted-watch")
     delivery = [e["fields"]["delivered"] for e in events if e["event"] == "permission_review_delivery"]
     assert delivery == [False]
+
+
+@pytest.mark.parametrize("control", ["revoke", "shutdown"])
+@pytest.mark.parametrize("decision", ["once", "grant", "question"])
+def test_control_cancels_a_saturated_pool_of_pending_human_decisions(control, decision):
+    """Every normal slot is occupied; cancellation gets bounded extra capacity."""
+    capacity = 3
+    all_waiting = threading.Event()
+    waiting_lock = threading.Lock()
+    waiting = 0
+    ui = ScriptedUI()
+
+    def late_fixture(context):
+        while context.active():
+            time.sleep(0.005)
+        return "expired scripted fixture answer" if decision == "question" else {"action": decision}
+
+    ui.callback = late_fixture
+    with Watcher(ui, max_clients=capacity, human_timeout=3) as watcher, ThreadPoolExecutor(capacity) as pool:
+        original_ask = watcher._ask
+
+        def count_waiters(operation, args, context):
+            nonlocal waiting
+            with waiting_lock:
+                waiting += 1
+                if waiting == capacity:
+                    all_waiting.set()
+            return original_ask(operation, args, context)
+
+        watcher._ask = count_waiters
+        assert propose() == {"accepted": True}
+        message = ({"kind": "question", "repo": "/project", "context": "SCRIPTED FIXTURE", "prompt": "Predict"}
+                   if decision == "question" else {"kind": "request", "request": request()})
+        pending = [pool.submit(ipc.exchange, message, 5) for _ in range(capacity)]
+        assert all_waiting.wait(1), "fixture did not fill the normal worker pool"
+        assert ipc.exchange({"kind": control}, timeout=1) == {
+            "revoked" if control == "revoke" else "stopped": True,
+        }
+        assert [future.result(2) for future in pending] == [None] * capacity
+        assert watcher.store.sessions() == ()
+        if control == "shutdown":
+            assert watcher.closed.wait(1)

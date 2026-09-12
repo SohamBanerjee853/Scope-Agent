@@ -349,6 +349,65 @@ def test_worker_limit_includes_clients_sending_no_frame(tmp_path):
     assert seen == []
 
 
+def test_opt_in_overflow_accepts_only_authenticated_controls(tmp_path):
+    entered, release = threading.Event(), threading.Event()
+    seen = []
+
+    def handler(message, context):
+        seen.append(message["kind"])
+        if message["kind"] == "request":
+            entered.set()
+            release.wait(2)
+        return {"received": True}
+
+    with ipc.Server(handler, home=tmp_path, max_clients=1, request_timeout=3,
+                    control_kinds=frozenset({"revoke", "shutdown"})) as server, ThreadPoolExecutor(1) as pool:
+        pending = pool.submit(ipc.exchange, {"kind": "request"}, timeout=3, home=tmp_path)
+        try:
+            assert entered.wait(1)
+            assert ipc.exchange({"kind": "question"}, timeout=1, home=tmp_path) is None
+            assert seen == ["request"]
+            assert ipc.exchange({"kind": "revoke"}, timeout=1, home=tmp_path) == {"received": True}
+            assert seen == ["request", "revoke"]
+        finally:
+            release.set()
+        assert pending.result(2) == {"received": True}
+
+
+def test_control_overflow_has_one_bounded_frame_reader(tmp_path):
+    entered, release = threading.Event(), threading.Event()
+
+    def handler(message, context):
+        if message["kind"] == "request":
+            entered.set()
+            release.wait(3)
+        return {"received": True}
+
+    with ipc.Server(handler, home=tmp_path, max_clients=1, request_timeout=4,
+                    control_kinds=frozenset({"revoke"})) as server, ThreadPoolExecutor(1) as pool:
+        pending = pool.submit(ipc.exchange, {"kind": "request"}, timeout=4, home=tmp_path)
+        try:
+            assert entered.wait(1)
+            with socket.create_connection(server.address, timeout=1) as stalled:
+                deadline = time.monotonic() + 1
+                while len(server._contexts) < 2 and time.monotonic() < deadline:
+                    time.sleep(0.005)
+                assert len(server._contexts) == 2
+                assert ipc.exchange({"kind": "revoke"}, timeout=0.1, home=tmp_path) is None
+                assert len(server._contexts) <= 2
+                assert stalled.recv(1) == b"", "overflow frame reader exceeded its short deadline"
+            assert ipc.exchange({"kind": "revoke"}, timeout=1, home=tmp_path) == {"received": True}
+        finally:
+            release.set()
+        assert pending.result(2) == {"received": True}
+
+
+@pytest.mark.parametrize("control_kinds", [{"request"}, ["revoke"], {"shutdown", "execute"}])
+def test_overflow_cannot_be_configured_for_permission_work(control_kinds):
+    with pytest.raises(ValueError):
+        ipc.Server(lambda message, context: {}, control_kinds=control_kinds)
+
+
 @pytest.mark.parametrize("cause", ["deadline", "disconnect", "shutdown"])
 def test_pending_handler_is_cancelled_and_cannot_return_late_allow(tmp_path, cause):
     entered, cancelled = threading.Event(), threading.Event()

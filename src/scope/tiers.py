@@ -143,7 +143,7 @@ def _lex(command: str, ps: bool) -> tuple[list[list[_Word]], list[tuple[str, str
             if ps and c == "<" and nxt == "#":
                 flags.append(("T3", "powershell-block-comment"))
             op = c
-            if nxt == c or (c == ">" and nxt == "|"):
+            if nxt == c or (c == ">" and nxt == "|") or (c == "<" and nxt == ">"):
                 op += nxt
                 i += 1
             if op == "<<":
@@ -278,7 +278,7 @@ def _segment(words: list[_Word], cwd: str | None, root: str, ps: bool,
         if word.operator:
             note("T2", "redirection")
             target = words[i + 1].value if i + 1 < len(words) else ""
-            if word.value.startswith(">") and not _inside(target, cwd, root):
+            if (word.value.startswith(">") or word.value == "<>") and not _inside(target, cwd, root):
                 note("T3", "outside-workspace-write")
             i += 2
         else:

@@ -69,3 +69,14 @@ noneditable install, full pytest, build, installed resource checks, both offline
 permission smoke dialects and native wrapper dry-runs. It has read-only contents
 permissions and no model credentials. Live hooks, native coding-host behavior,
 real human debugging and pane startup remain outside these offline checks.
+
+The final local merge of S4 into the reconciled history passed **1,229 tests,
+0 skipped**, in 53.25 seconds on macOS 14.8.4 / CPython 3.11.16 / uv 0.12.13.
+The source distribution and wheel built successfully. A separate noneditable
+wheel environment verified both skills, all demo assets, the real understanding
+projection and both permission smoke dialects. Its actual payment probe observed
+two charges before the repair and one after. The source archive now contains the
+POSIX/PowerShell wrapper twins with only the intended package files.
+
+Hosted CI is pending at this commit. Its completed run evidence will be reported
+with the final merge; this local result does not claim native Windows execution.
