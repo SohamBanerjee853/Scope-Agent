@@ -270,7 +270,9 @@ def main(argv=None) -> int:
         print("Two exact hook allows; revocation blocked reuse with budget remaining; synthetic git push stayed T3.")
         print("Receipt built from observed events. Temporary homes removed.")
         print("No human answers, requested commands, native shell, coding host or model were executed.")
-        print("Combined understanding receipt integration and live/native Windows behavior remain unverified.")
+        pending = report["receipt"].get("understanding", {}).get("status") == "pending_integration"
+        print("Understanding projection unavailable." if pending else "Understanding projection loaded; this fixture collects no predictions.")
+        print("The A2 understanding workflow and live/native Windows behavior remain unverified.")
     return 0
 
 

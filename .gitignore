@@ -1,9 +1,16 @@
-.DS_Store
+# Local Python environments, state, and generated files
 .venv/
 .tools/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
 dist/
 build/
 *.egg-info/
+.coverage
+htmlcov/
+.env
+.env.*
+.scope/
+.DS_Store

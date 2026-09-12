@@ -89,7 +89,8 @@ class Watcher:
         with self.store.lock:
             generation = self.store.revoke()
             for session_id in sorted(self._sessions):
-                self._record(session_id, "scopes_revoked", generation=generation, source="watcher")
+                self._record(session_id, "scopes_revoked", generation=generation, source="watcher",
+                             session=session_id, revoked=True)
             return generation
 
     def _ask(self, operation, args, context):

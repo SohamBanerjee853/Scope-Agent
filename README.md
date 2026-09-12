@@ -1,59 +1,118 @@
 # Scope
 
-Only the F0 foundation exists: a Python package, local paths and event logs, and
-lazy CLI routing. Permission scopes, understanding checks, receipts, demos, and
-host launchers are not implemented yet. Reserved commands fail explicitly.
+Scope adds bounded permission review to your existing coding agent. A human can
+approve a narrow command scope with a finite budget; matching requests reuse it
+until expiry or revocation. Dangerous T3 commands, including every `git push`,
+still fall back to the host's native approval flow.
 
-Scope is intended to support two independent workflows:
+The repository also contains Arjun's source snapshots, persistent task context,
+bounded probe runner and historical understanding projection. Soham is adding
+A3's CLI, skill and disposable demo while Arjun develops A2's prediction and
+separate execution-consent workflow. See the owner and integration checkpoints
+under docs for the exact implemented state. The `scope codex` and `scope claude`
+two-pane launchers are planned and remain unavailable.
 
-- A person reviews a bounded permission card. Matching requests can reuse that
-  approval until its budget or lifetime expires; dangerous requests still require
-  native review.
-- A person predicts a concrete program result, separately consents to a probe,
-  inspects its observation, and chooses a manageable next task.
+Permission is not proof of execution. Predictions are not consent or mastery.
+Scope supplements the host's sandbox and approval controls. It uses your existing
+coding agent and requires no separate model API key or service account.
 
-A prediction never grants permission or proves general mastery. The planned
-watcher transports human decisions; probes execute in the calling agent's
-environment. Scope supplements the coding tool's sandbox and approval layers.
-The design uses the user's existing signed-in coding agent, without an additional
-model SDK, API key, database, or web service.
+## Install and check locally
 
-The planned `scope codex` and `scope claude` commands will put the coding agent on
-the left and Scope's review pane on the right in one terminal, followed by a
-receipt on exit. They are reserved commands today. Automatic panes are planned
-for tmux on macOS/Linux/WSL; native Windows will have an explicit manual fallback.
-Neither startup nor Windows behavior has been verified in F0.
+With Python 3.11+ and uv available, these commands work in POSIX and PowerShell:
 
-## Develop the foundation
-
-With Python 3.11+ and uv available, these commands work in POSIX shells and
-PowerShell:
-
-```sh
+```text
 git clone https://github.com/SohamBanerjee853/Scope-Agent.git
 cd Scope-Agent
 uv sync --locked
 uv run scope --help
+uv run scope smoke --dry-run
+uv run scope smoke --json
+uv run scope smoke --shell powershell --json
+```
+
+Smoke uses a real local watcher and Scope hook processes with explicitly scripted
+fixture choices. Requested command strings never execute. It demonstrates two
+allows, revocation with budget remaining and a synthetic T3 hard ask, using fresh
+session IDs and temporary homes. It does not launch a coding host or model.
+
+## Optional manual permission setup
+
+Preview before installing:
+
+```text
+uv run scope install --dry-run
+uv run scope install --project . --dry-run
+uv run scope install-skill --project . --dry-run
+```
+
+Remove `--dry-run` only for the installation you intend. Hook installation defaults
+to `CODEX_HOME/hooks.json`; project hooks use `.codex/hooks.json`. Existing unrelated
+hooks are preserved, changes get backups, and ambiguous Scope duplicates require
+migration. `--abstain` is passive; persistent always-allow mode is refused.
+Project permission skills install into `.agents/skills/scope-permissions` and
+preserve edits. Default global skill installation uses a compatibility path under
+CODEX_HOME; confirm discovery in your host.
+
+Review/trust the exact hook definitions in Codex `/hooks` and restart as required.
+Installation is not proof that native hooks fired. All matching hooks contribute:
+any deny wins, otherwise another hook's allow can permit a request even when Scope
+abstains. Host decisions made before a PermissionRequest remain outside coverage.
+
+In one terminal, run `uv run scope watch`. In the current coding session, use
+`scope propose` with a bounded summary, exact command families and budget. A
+proposal is not approval; the human decides in the watcher. The companion skill
+explains this workflow. Receipts replay with `uv run scope receipt SESSION --json`
+and optional `--home PATH`. Native answers and unobserved execution stay unknown.
+
+## Debugging context and disposable demo
+
+These A3 commands use Arjun's implemented A1 APIs:
+
+```text
+uv run scope start "Investigate the retry behavior" --json
+uv run scope checkpoint TASK_ID --note "Inspect the changed retry key" --json
+uv run scope knowledge TASK_ID --json
+uv run scope skill --install --dry-run
+uv run scope revoke --session SESSION --json
+uv run scope demo --prepare-only ../scope-payment-demo --json
+```
+
+Use the task ID returned by start. `-C PATH` selects a project for task/skill
+commands. Revoke clears the watcher's grants and pending answers; it preserves
+saved debugging evidence. Removing `--dry-run` installs the project understanding
+skill while preserving local edits. Demo preparation only writes a new/empty
+directory, initializes its own Git repository and installs that skill. It uses a
+fresh demo identity regardless of any inherited coding session.
+
+The demo's initial bug charges one fake order twice when an acknowledgement is
+lost. Changing the retry key to the stable order ID produces one charge. From the
+prepared project, `scope demo-adapter probe` runs only the bundled fixture or that
+exact repair and prints actual JSON; it uses no payment service. The packaged
+retry regression intentionally fails before the repair and passes afterward.
+
+`scope check`, `scope next`, and `scope demo --scripted` currently report an
+explicit pending A2 dependency. They do not invent predictions or execute a
+substitute consent workflow. Arjun's published branch has not supplied those
+callable signatures yet. [A2/A3 coordination](docs/A2-A3-COORDINATION.md) records
+what can be wired when he publishes them.
+
+## Development and current limits
+
+```text
 uv run pytest -q
 uv build
 ```
 
-Runtime dependencies are Rich and PyYAML; pytest is a development dependency.
-Resources beneath `src/scope` are included in wheels. F0 includes clearly marked
-resource placeholders; feature owners will add actual rules, skills, and demos.
+Resources under src/scope ship in wheels; smoke wrappers ship in the source
+archive. `scripts/smoke.sh` and `scripts/smoke.ps1` use the same Python CLI.
+SCOPE_HOME defaults to ~/.scope, CODEX_HOME to ~/.codex. Test homes are temporary.
+Native Windows hooks, live host trust and real human debugging are separate from
+offline parser/transport verification.
 
-`SCOPE_HOME` defaults to `~/.scope`; `CODEX_HOME` defaults to `~/.codex`. Looking up
-a path creates nothing. Appending an event creates its session directory as needed.
-All tests isolate these locations and `CLAUDE_CONFIG_DIR` in temporary directories.
-
-Read [the frozen interfaces](docs/INTERFACES.md), [contributor instructions](AGENTS.md),
-and [the baseline hook reference](docs/codex-hook-reference.md) before feature work.
+Read [the interfaces](docs/INTERFACES.md), [Soham's checkpoint](docs/SOHAM-CHECKPOINT.md),
+[Arjun's checkpoint](docs/ARJUN-CHECKPOINT.md), and
+[the understanding purpose](docs/UNDERSTANDING-PURPOSE.md). Historical foundation
+checkpoints describe their original commits, not the current feature set.
 
 Developed with AI coding assistance. Offline tests use isolated fixtures;
 they do not establish live model behavior.
-
-F0 ends at the shared main checkpoint. Soham's next milestone is S1 on
-`work/soham-permissions`; Arjun's is A1 in a separate checkout on
-`work/arjun-understanding`. Neither feature branch is created by F0.
-
-See [the F0 checkpoint](docs/F0-CHECKPOINT.md) for actual validation and limits.
