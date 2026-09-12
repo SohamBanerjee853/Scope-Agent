@@ -1,0 +1,15 @@
+# Python, local state, and secrets
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+.env
+.env.*
+.scope/
+.DS_Store
