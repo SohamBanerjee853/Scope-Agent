@@ -2,8 +2,11 @@
 
 Owned by Arjun; frozen for Soham’s receipt integration review at A1. This adds
 detail to [INTERFACES.md](INTERFACES.md) without changing its wire or IPC fields.
-Only `task_start` and `task_checkpoint` are emitted by A1. The other events below
-are reserved contracts for A2/A3, not claims of completed behavior.
+A1 emits `task_start` and `task_checkpoint`. A2 now emits prediction, consent,
+execution, observation, skip, next-task, deferral and dispatch records through
+`experience.py`; [A2-API.md](A2-API.md) freezes its callable and callback shapes.
+`agent_process` remains reserved for optional later host integration. Soham's
+existing revoke adapter emits `scopes_revoked`; CLI/demo wiring to A2 remains A3.
 
 The workflow's purpose is to help a developer recover codebase context and get
 out of debugging loops. See [UNDERSTANDING-PURPOSE.md](UNDERSTANDING-PURPOSE.md)
@@ -85,16 +88,26 @@ prediction and current source evidence. JSON true and 1 remain different types.
 Timeouts, nonzero exits, either truncated stream, invalid/missing JSON fields,
 invalid UTF-8, forced output-pipe cleanup, cleanup errors and changed/missing
 source prevent a verified comparison. A zero exit code alone is insufficient.
+A2 also rejects duplicate keys, nonfinite values, trailing content and excessive
+JSON depth/size. Comparison is recursive and type-sensitive. `execution_timestamp`
+can be null when the supplied execution record is invalid. Stored A2 observations
+also include their `check_id` for state correlation.
 
 `learning.version_observation` keeps the historical `status` but adds a fresh
 `source_status` and `current_status`. An old comparison cannot be reused as
 current evidence when its source is stale or unavailable. A1 supplies versioning;
-A2 must implement prediction collection, consent, execution and comparison.
+A2 now collects predictions and separate consent, executes and compares. A check
+can be `completed` with a `not_verified` observation: only evidence capture ended.
 
 ### Next-task handoff
 
 `handoff` contains `handoff_id`, `choice` (`smaller` or `larger`), `instruction`,
-`target` (normally `current_agent`), `status` (`selected`) and `provenance`.
+`target` (`current_agent`), `status` (`selected`), `provenance` and `created_at`.
+Persistent handoffs can then be `dispatching`, `dispatched` or `failed`; the
+selection event retains the original selected state. A delivery adapter's strict
+true acknowledgement is required before emitting a dispatched outcome. Exceptions,
+missing adapters and other return values emit failed delivery. No outcome claims
+completion, and uncertain/interrupted delivery is never retried automatically.
 Deferral has its own event. Optional new-host launch must have distinct explicit
 consent and fake launchers in tests; selecting the larger task is not that consent.
 

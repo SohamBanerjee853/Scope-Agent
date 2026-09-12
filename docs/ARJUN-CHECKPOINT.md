@@ -247,3 +247,60 @@ A real local watcher plus labeled simulated terminal input reproduced a separate
 pending-direct-question revocation gap in partial A3. The review documents that
 gap for the UI/engine handoff, without changing Soham's UI, executing a probe or
 claiming human consent. A2 remains gated on pulling the requested main merge.
+
+## A2 — prediction, separate consent, observation and next action
+
+September 12, 2026. Soham merged both histories into main `37f4b75`. Arjun's
+checkout pulled it with a fast-forward on `arjun_branch`; main's history contains
+Arjun's `84a2e7f` plus the tested S1 `54f39c7` and S4 `20d6ce0`. The merged
+baseline passed **1,246 tests, 0 skipped** before A2 implementation. This satisfies
+Arjun's prerequisite to pull the merge and then begin A2. Soham's merge also
+resolved the previously documented direct-question cancellation gap by routing
+all questions through the watcher.
+
+`experience.py` now uses the real classifier and bounded caller-side runner to
+save a typed prediction and explanation before asking separate execution consent.
+T3, declined/missing answers, and changed supporting source cannot start a probe.
+Successful complete JSON output is compared only against the saved prediction
+and current references; incomplete execution or evidence remains `not_verified`.
+Callbacks cannot mutate the accepted command or decision through their payloads.
+Concurrent saved-record changes abort through type-sensitive comparisons under
+the state lock. The engine has no model client, reusable grant or host launcher.
+
+`learning.py` adds validated atomic task helpers, defensive A2 record storage,
+and context recovery including description, current source manifest, checkpoints,
+checks and handoffs. State records unfinished phases before potentially external
+work. Recovery displays them without resuming or executing anything. Next-task
+selection, actual current-agent delivery and completion remain distinct; missing,
+failed or uncertain delivery never becomes a success or an automatic retry.
+Task state and events remain separate writes, with documented failure behavior.
+
+[A2-API.md](A2-API.md) freezes callable signatures, callback/request/result shapes,
+limits and the concrete A3 handoff. [UNDERSTANDING-EVENTS.md](UNDERSTANDING-EVENTS.md)
+now marks implemented events and preserves the pure receipt projection. Only
+Arjun-owned production modules, A2 tests and documentation were changed; Soham's
+permission code and A3 adapters remain intact.
+
+Added **273 A2 tests**: 94 state cases, 106 pure comparisons and 73 workflow
+acceptance cases. The real offline debugging journey observes two fake charges,
+recovers context in a fresh process, records selection/delivery to a fixture inbox,
+applies the fixture's stable-order-key repair, observes one charge and passes the
+retry/distinct-order regression. Receipt replay preserves three predictions,
+executions and observations while permission counts remain zero. All automated
+answers are `test_fixture`; the fixture, not a model or person, writes the repair.
+
+Final full-suite validation with fresh noneditable installs on macOS arm64:
+
+- Python 3.14.7: **1,519 passed, 0 skipped**, 100.65 seconds.
+- Python 3.11.16: **1,519 passed, 0 skipped**, 98.79 seconds.
+- `uv build` passed. Six Arjun production modules match both installed packages
+  and wheel bytes; new tests and API/event docs match the source distribution.
+- Installed-resource checks and both POSIX/PowerShell scripted permission smoke
+  cases passed. They verify classification/fixture transport on macOS, not native
+  PowerShell or Windows host execution.
+
+A2 is ready for Soham's A3 adapters. `learning_cli.run_check` and `run_next`,
+successful CLI rendering, and the combined packaged demo still need his wiring
+to the real API. No real human understanding session, authenticated coding host,
+live permission interception, new Windows run or debugging-time reduction was
+verified. Commit and push this checkpoint to `arjun_branch`; do not push main.
