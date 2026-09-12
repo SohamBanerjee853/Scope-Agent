@@ -1,4 +1,9 @@
-# Soham checkpoint: S1
+# Soham checkpoints
+
+The current milestone is S2, recorded below. The S1 section is historical evidence
+for handoff commit `54f39c769df4603e7bae8fb7b63d823657c15662`.
+
+## S1 (historical)
 
 Completed September 12, 2026 on `work/soham-permissions` in the new public
 `SohamBanerjee853/Scope-Agent` repository. Foundation parent:
@@ -123,3 +128,146 @@ Soham's next milestone is S2 on this branch after checkpoint review. Arjun can
 merge this exact tested S1 commit (preserving history) into his separate branch
 before A2; A1 remains independent. No IPC fields or frozen callable contract
 changes are proposed in S1.
+
+## S2: bounded grants and the human watcher
+
+Implemented September 12, 2026 on `work/soham-permissions`, on top of S1
+`54f39c769df4603e7bae8fb7b63d823657c15662`. The commit containing this addition is
+the tested S2 handoff; the handoff response records its exact pushed SHA.
+
+### Behavior and public commands
+
+`uv run scope watch` starts one authenticated IPv4 loopback listener under
+SCOPE_HOME and owns terminal review. Another watcher using that home fails
+without replacing the active endpoint. Ctrl-C or authenticated shutdown clears
+grants and pending answers, removes the owned endpoint and releases its lifetime
+lock. A noninteractive watcher refuses human decisions and questions.
+
+`uv run scope propose --summary "Create local notes" --command "touch *" --budget 2 --session SESSION`
+submits a proposal. Repeat `--command` and `--domain` as needed; `--agent` is
+optional, and omitted `--session` uses CODEX_THREAD_ID. Submission is not approval.
+These command arguments work through the same Python CLI on either shell; no
+shell wrapper files were added. This checkout's uv executable is `.tools/bin/uv`.
+
+The terminal displays the complete request, session/agent/cwd/shell, description
+and proposed card as escaped data. A human chooses grant, edited grant, once,
+deny, abstain or revoke. Editing requires the complete card JSON. Every input
+requires the displayed sequence-and-random reply tag; edited-card input gets its
+own tag. Queued/partial data from cancelled prompts cannot answer a later prompt.
+There is one reader, with bounded polling and no abandoned input threads.
+Only terminal review is implemented; no popup is launched.
+
+T1 remains a local hook decision. T2 goes to the watcher. T3 returns empty stdout
+for native handling before any grant lookup. Missing listeners, invalid replies,
+timeouts, transport failures and invalid classifier results do not allow.
+The strict S1 wire envelope remains unchanged.
+
+### Card and authority bounds
+
+`grants.validate_card(raw) -> Card` enforces exactly summary/commands/domains/budget,
+1–300 summary characters, 1–20 patterns, up to 20 exact lowercase hostnames and an
+integer budget of 1–100 (excluding bool). Patterns use literal words and an optional
+final standalone `*`; each pattern is additionally limited to 300 characters.
+Interpreters, broad command roots and unknown/custom executables cannot become
+reusable patterns. Known families include local file tools, narrow Git operations,
+pytest, `uv run pytest`, and `scope demo-adapter` for the later rehearsal.
+
+Command reuse is stricter than classification: quoted, escaped, compound,
+redirected, custom-path and dynamic shapes require individual review. Every grant
+use reclassifies first. Network grants require all exact destinations to match
+the card; redirects and unrecognized endpoint syntax cannot reuse them.
+
+Store.propose and Store.approve are separate operations. Approval is invoked only
+by the human review path. Grants have fresh IDs, normalized session/agent/cwd/shell
+bindings, monotonic 900-second expiry and atomically consumed budgets. A proposal
+never replaces an approved grant. Proposals and grants are memory-only, capped at
+1,024 contexts each; the watcher also caps tracked session identities at 1,024.
+
+Revocation increments a generation and clears grants/proposals without waiting
+for the terminal reader. Already queued grant, once and question answers are
+invalidated. Responses recheck that generation under the same lock immediately
+before sending. Fresh grants are committed at that final boundary and rolled back
+under the lock if transmission fails or is cancelled. Another request cannot use
+a pending, undelivered new grant. Existing budgets may be conservatively spent
+when a caller disconnects; they never increase or reset themselves.
+
+### IPC and events
+
+The frozen `ipc.exchange(message, timeout=105, *, home=None) -> dict | None`
+supports ping, proposal, request, question, notice, revoke, stop and shutdown with
+the logical fields in INTERFACES.md. `watch.json` contains only port/token;
+`watch.lock` holds an OS lifetime lock and intentionally remains after shutdown
+to avoid replacing a lock inode while another process still owns it.
+
+Messages are bounded UTF-8 newline-delimited JSON, at most 128 KiB including
+authentication/framing. Endpoint files are at most 4,096 bytes. Tokens and random
+per-request nonces are validated; the authenticated reply echoes the nonce.
+Only 127.0.0.1 is connected/listened to. There is one message per connection, no
+retry or resend, a bounded accept backlog and at most 16 active workers including
+slow frame readers. The server's 95-second deadline starts on accept, leaving
+room inside the client's 105-second deadline. Token values never enter logs.
+
+POSIX files require private owned regular files without links; Windows uses an
+owner-only protected DACL and a byte-range lifetime lock. Native Windows execution
+of that code is still unverified. This is local same-user coordination, not a
+boundary against another process owned by the same user. The launch-only mailbox
+and its replay suppression remain integration work; they were not added in S2.
+
+Internal transport callbacks for admission and guarded reply commit/finalization
+carry no new logical IPC or host wire fields. The watcher runs no command or probe.
+Questions return only human answers or explicit errors, with no grant semantics.
+Arjun's caller remains responsible for recording prediction/consent and running
+any separately approved probe.
+
+Hook events `permission_request` and `permission_decision` share a fresh internal
+request_id. Watcher `permission_review`, `permission_review_decision`,
+`grant_created` and `permission_review_delivery` correlate with it. Proposal and
+revocation events are `proposal_created` and `scopes_revoked`. Use the foundation
+record shape `{ts, event, fields}`. S3 receipts must join by request_id, not count
+watcher and hook records as separate requests. A watcher decision records review;
+the hook's final decision records the returned envelope. `delivered` only means
+socket sendall succeeded, not host consumption or command execution. None of
+these events proves the command ran or reveals an unobserved native decision.
+
+### Validation and remaining work
+
+On macOS 14.8.4 / CPython 3.11.16 / uv 0.12.13:
+
+- Full suite: **759 passed, 0 skipped**.
+- Existing S1/foundation tests: 429; grant cases: 197; transport cases: 92;
+  real TCP watcher/CLI cases: 33; terminal reply-tag/input cases: 8.
+- Both shell tables remain evaluated on this Mac. Tests use isolated SCOPE_HOME,
+  CODEX_HOME and CLAUDE_CONFIG_DIR plus explicitly labeled scripted human fixtures.
+- `uv build`: source distribution and wheel succeeded. Installed that wheel
+  noneditably in `.tools/wheel-check`: **759 passed, 0 skipped** in 11.52 seconds;
+  imports resolved to site-packages and bundled policy resources were readable.
+
+The test count reflects parameterized cases, including malformed inputs and both
+shell dialects. It is not a count of executed shell commands. Socket and process
+tests exercise local transport, hook entry points and lifetime locking, without
+live hosts or model calls. Terminal polling branches are tested with injected
+descriptor/console fixtures. Actual human terminal interaction, native Windows
+ACL/console behavior, live hook trust and real-host approvals remain unverified.
+
+No global hooks, agent skills, service accounts or paid integrations were installed.
+Arjun's modules and the production foundation files remain unchanged. The next
+milestone is S3: installation, permission skill, lifecycle hooks, receipts and the
+offline smoke harness. Understanding integration remains pending Arjun's work.
+
+### Sponsor guidance adopted
+
+Optional Exa explanation guidance in the permission skill remains a later
+addition after the permission workflow.
+
+Any such retrieval belongs to the current coding agent, outside hook.py, tiers.py
+and watcher decisions. Only generic public command concepts may be searched;
+source, transcripts, private paths, environment values and full sensitive commands
+must stay local. Retrieved text is untrusted, an unavailable explanation must not
+change permission behavior, and Git push remains T3. MCP calls are outside this
+shell PermissionRequest coverage. No Exa call or account setup was performed.
+
+CopilotKit/web review, Ambiguous exports, new UI/transport/events and spending
+remain separately coordinated later proposals, not S2 scope. No React framework,
+model SDK or remote approval engine was introduced. The linked event page returned
+HTTP 403 when checked; event rules and sponsor claims were not independently
+verified in this milestone.

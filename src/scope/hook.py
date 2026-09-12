@@ -1,13 +1,14 @@
 """Fail-closed, import-light baseline permission hook.
 
-S1 allows recognized T1 requests locally and abstains for T2/T3. Classification
-does not establish command execution or replace the host's sandbox. No watcher,
-grant store, terminal UI, or model client belongs on this path in this milestone.
+S2 allows recognized T1 requests locally, sends T2 to the human watcher and
+abstains for T3. Classification does not establish command execution or replace
+the host's sandbox. The watcher UI is never imported on this automatic path.
 """
 
 import argparse
 import os
 import sys
+import uuid
 
 
 class _Parser(argparse.ArgumentParser):
@@ -78,11 +79,30 @@ def main(argv: list[str] | None = None) -> int:
         )
         if not _valid_tier(result, Tier, SegmentFinding):
             return 0
-        if result.name == "T3":
-            return 0
-        if result.name == "T1" or args.always_allow:
-            # Construct all JSON before touching stdout. Input cannot add fields.
-            sys.stdout.write(decision_json("allow"))
+        from . import log
+
+        request_id = str(uuid.uuid4())
+        log.append(request.session_id, "permission_request", request_id=request_id,
+                   command=request.command, cwd=request.cwd, shell=request.shell,
+                   agent_id=request.agent_id, tier=result.name, reason=result.reason)
+        behavior, message = None, None
+        if result.name == "T1" or args.always_allow and result.name != "T3":
+            behavior = "allow"
+        elif result.name == "T2":
+            from .ipc import exchange
+
+            reply = exchange({"kind": "request", "request": request.original, "request_id": request_id})
+            if (isinstance(reply, dict) and reply.keys() <= {"behavior", "message"}
+                    and reply.get("behavior") in ("allow", "deny", None)):
+                behavior = reply.get("behavior")
+                message = reply.get("message")
+        # Validate/serialize the complete response before logging or writing it.
+        output = decision_json(behavior, message)
+        log.append(request.session_id, "permission_decision", request_id=request_id,
+                   behavior=behavior, tier=result.name, source="hook",
+                   smoke=bool(args.always_allow))
+        if output:
+            sys.stdout.write(output)
             sys.stdout.flush()
         return 0
     except SystemExit as exc:
