@@ -1,0 +1,26 @@
+0:00–0:10  SOHAM
+I'm Soham, and this is Arjun. We built Scope to help developers review a coding agent's permissions and understand what its changes actually do.
+
+0:10–0:26  SOHAM
+Here's a checkout bug: a payment succeeds, its reply gets lost, and the retry charges the customer again. We approve one narrow command scope, with a command budget, an expiry, and session boundaries.
+
+0:26–0:40  SOHAM
+That approval is reusable only within those bounds. But a publishing command, like git push, still gets no automatic approval. This boundary check is synthetic; nothing is pushed.
+
+0:40–1:03  ARJUN
+I'm Arjun. Scope also checks the developer's mental model. Before the probe runs, we record a prediction and a reason. Here, we predict one charge because there's only one order. Saving that prediction does not authorize execution. We separately review the exact probe and choose Run once.
+
+1:03–1:14  ARJUN
+The actual result is two charges. Our prediction was wrong, and the regression test fails. Each retry created a new payment identity.
+
+1:14–1:24  ARJUN
+We select a smaller next step: keep the order ID stable. The demo applies that repair and records the source change.
+
+1:24–1:42  ARJUN
+Now we make a fresh prediction and approve another probe. The original scope is reused, but execution consent stays separate. This time we observe one charge, and all three regression tests pass.
+
+1:42–1:52  SOHAM
+We can revoke the remaining scope immediately. Another matching request loses automatic approval. The receipt keeps permissions, predictions, and observed results distinct.
+
+1:52–2:00  SOHAM
+That's Scope: bounded autonomy with evidence you can inspect. This recording uses a local payment fixture and scripted inputs.

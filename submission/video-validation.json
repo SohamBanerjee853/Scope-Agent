@@ -1,0 +1,24 @@
+[
+  {
+    "file": "scope-submission-clean.mp4",
+    "bytes": 1226091,
+    "duration": 120.0,
+    "size": [
+      1920,
+      1080
+    ],
+    "fps": 10.0,
+    "full_decode": "passed"
+  },
+  {
+    "file": "scope-submission-captioned.mp4",
+    "bytes": 1422721,
+    "duration": 120.0,
+    "size": [
+      1920,
+      1080
+    ],
+    "fps": 10.0,
+    "full_decode": "passed"
+  }
+]

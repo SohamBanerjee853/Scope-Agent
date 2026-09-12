@@ -1,0 +1,103 @@
+1
+00:00:00,000 --> 00:00:02,500
+Soham: I'm Soham, and this is Arjun.
+
+2
+00:00:02,500 --> 00:00:10,000
+Soham: We built Scope to help developers review a coding agent's permissions and understand what its changes actually do.
+
+3
+00:00:10,000 --> 00:00:18,727
+Soham: Here's a checkout bug: a payment succeeds, its reply gets lost, and the retry charges the customer again.
+
+4
+00:00:18,727 --> 00:00:26,000
+Soham: We approve one narrow command scope, with a command budget, an expiry, and session boundaries.
+
+5
+00:00:26,000 --> 00:00:30,000
+Soham: That approval is reusable only within those bounds.
+
+6
+00:00:30,000 --> 00:00:36,000
+Soham: But a publishing command, like git push, still gets no automatic approval.
+
+7
+00:00:36,000 --> 00:00:40,000
+Soham: This boundary check is synthetic; nothing is pushed.
+
+8
+00:00:40,000 --> 00:00:40,979
+Arjun: I'm Arjun.
+
+9
+00:00:40,979 --> 00:00:44,404
+Arjun: Scope also checks the developer's mental model.
+
+10
+00:00:44,404 --> 00:00:49,787
+Arjun: Before the probe runs, we record a prediction and a reason.
+
+11
+00:00:49,787 --> 00:00:54,681
+Arjun: Here, we predict one charge because there's only one order.
+
+12
+00:00:54,681 --> 00:00:58,106
+Arjun: Saving that prediction does not authorize execution.
+
+13
+00:00:58,106 --> 00:01:03,000
+Arjun: We separately review the exact probe and choose Run once.
+
+14
+00:01:03,000 --> 00:01:06,000
+Arjun: The actual result is two charges.
+
+15
+00:01:06,000 --> 00:01:10,500
+Arjun: Our prediction was wrong, and the regression test fails.
+
+16
+00:01:10,500 --> 00:01:14,000
+Arjun: Each retry created a new payment identity.
+
+17
+00:01:14,000 --> 00:01:19,238
+Arjun: We select a smaller next step: keep the order ID stable.
+
+18
+00:01:19,238 --> 00:01:24,000
+Arjun: The demo applies that repair and records the source change.
+
+19
+00:01:24,000 --> 00:01:29,625
+Arjun: Now we make a fresh prediction and approve another probe.
+
+20
+00:01:29,625 --> 00:01:35,250
+Arjun: The original scope is reused, but execution consent stays separate.
+
+21
+00:01:35,250 --> 00:01:42,000
+Arjun: This time we observe one charge, and all three regression tests pass.
+
+22
+00:01:42,000 --> 00:01:45,182
+Soham: We can revoke the remaining scope immediately.
+
+23
+00:01:45,182 --> 00:01:47,909
+Soham: Another matching request loses automatic approval.
+
+24
+00:01:47,909 --> 00:01:52,000
+Soham: The receipt keeps permissions, predictions, and observed results distinct.
+
+25
+00:01:52,000 --> 00:01:55,789
+Soham: That's Scope: bounded autonomy with evidence you can inspect.
+
+26
+00:01:55,789 --> 00:02:00,000
+Soham: This recording uses a local payment fixture and scripted inputs.

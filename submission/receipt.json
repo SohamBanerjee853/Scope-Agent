@@ -1,0 +1,377 @@
+{
+  "schema_version": 1,
+  "session_id": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+  "status": "ended",
+  "counts": {
+    "requests": 4,
+    "auto_allowed": 2,
+    "allowed_once": 0,
+    "denied": 0,
+    "hard_asks": 1,
+    "scopes_granted": 1
+  },
+  "actions": [
+    {
+      "request_id": "75d19a68-35d2-4697-b7a6-dd1f1bdc191d",
+      "command": "scope demo-adapter probe",
+      "cwd": "/Users/soham/Scope-Agent/.tools/submission-video/take-eaca8721/checkout",
+      "shell": "bash",
+      "agent_id": null,
+      "tier": "T2",
+      "decision": "allow",
+      "action": "auto_allowed",
+      "decision_source": "hook",
+      "delivery": "unknown",
+      "execution": "unknown",
+      "native_decision": "unknown"
+    },
+    {
+      "request_id": "d7fef089-f4d1-404f-8cf7-5f80c2e18003",
+      "command": "git push origin main",
+      "cwd": "/Users/soham/Scope-Agent/.tools/submission-video/take-eaca8721/checkout",
+      "shell": "bash",
+      "agent_id": null,
+      "tier": "T3",
+      "decision": "unknown",
+      "action": "hard_ask",
+      "decision_source": "hook",
+      "delivery": "unknown",
+      "execution": "unknown",
+      "native_decision": "unknown"
+    },
+    {
+      "request_id": "7e1b03b3-4d5e-4126-a3a7-9066b0a7a6d1",
+      "command": "scope demo-adapter probe",
+      "cwd": "/Users/soham/Scope-Agent/.tools/submission-video/take-eaca8721/checkout",
+      "shell": "bash",
+      "agent_id": null,
+      "tier": "T2",
+      "decision": "allow",
+      "action": "auto_allowed",
+      "decision_source": "hook",
+      "delivery": "unknown",
+      "execution": "unknown",
+      "native_decision": "unknown"
+    },
+    {
+      "request_id": "05d4352c-ece9-42b9-870c-39d0d36eecfd",
+      "command": "scope demo-adapter probe",
+      "cwd": "/Users/soham/Scope-Agent/.tools/submission-video/take-eaca8721/checkout",
+      "shell": "bash",
+      "agent_id": null,
+      "tier": "T2",
+      "decision": "unknown",
+      "action": "unknown",
+      "decision_source": "hook",
+      "delivery": "unknown",
+      "execution": "unknown",
+      "native_decision": "unknown"
+    }
+  ],
+  "understanding": {
+    "tasks": [
+      {
+        "ts": "2026-09-12T19:58:41.579330+00:00",
+        "event": "task_start",
+        "fields": {
+          "task_id": "task-34b194f5-b00c-4272-8642-e5d27fc9eeac",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "project_id": "6fb4f684a57596dcd7bbdb344c2fc967637db0dbd3b319b5b02acdff43522576",
+          "repo": "/Users/soham/Scope-Agent/.tools/submission-video/take-eaca8721/checkout",
+          "description": "Investigate duplicate charges after a lost checkout acknowledgement.",
+          "baseline": {
+            "timestamp": "2026-09-12T19:58:41.577195+00:00",
+            "files": {
+              ".scope-demo.json": {
+                "sha256": "7971598055ccf024bd106fb92d6aa9507bbe0fe6683e6969257cc50254b2576e",
+                "bytes": 115,
+                "line_count": 1
+              },
+              "README.md": {
+                "sha256": "c0792b440a6d3cfd59632088774276a20519f4ca947c8491e1fce32164252b57",
+                "bytes": 3824,
+                "line_count": 66
+              },
+              "payment.py": {
+                "sha256": "c8aad649549873f26945d94de4977cb14221daf239e1ab267c2e3fa0385ca85f",
+                "bytes": 2110,
+                "line_count": 59
+              },
+              "pytest.ini": {
+                "sha256": "8250d20f42b419af40706490ead78aabab9feba93eab09a3f626e3de5256e1f4",
+                "bytes": 9,
+                "line_count": 1
+              },
+              "test_payment.py": {
+                "sha256": "ff5e24e42ec04ef96cdab4ebd1fb76f0a9595dbed7c9508276feedb181f433d3",
+                "bytes": 1289,
+                "line_count": 32
+              }
+            },
+            "skipped": {
+              ".agents/skills/scope-understand/SKILL.md": "excluded_directory"
+            },
+            "listing_complete": true,
+            "skipped_overflow": 0
+          }
+        }
+      }
+    ],
+    "predictions": [
+      {
+        "ts": "2026-09-12T19:59:35.120246+00:00",
+        "event": "prediction",
+        "fields": {
+          "task_id": "task-34b194f5-b00c-4272-8642-e5d27fc9eeac",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "check_id": "check-6eabf4cb-809a-414e-9709-c9f635c3a116",
+          "prediction": {
+            "value": 1,
+            "reason": "One order should keep the same payment identity.",
+            "assistance": "",
+            "provenance": "test_fixture",
+            "references": [
+              {
+                "path": "payment.py",
+                "start_line": 31,
+                "end_line": 33,
+                "sha256": "c8aad649549873f26945d94de4977cb14221daf239e1ab267c2e3fa0385ca85f",
+                "citation": "payment.py:31-33"
+              }
+            ],
+            "question": "After the first reply is lost, how many charges will this order create?",
+            "field": "charge_count",
+            "argv": [
+              "scope",
+              "demo-adapter",
+              "probe"
+            ]
+          }
+        }
+      },
+      {
+        "ts": "2026-09-12T20:00:12.124554+00:00",
+        "event": "prediction",
+        "fields": {
+          "task_id": "task-34b194f5-b00c-4272-8642-e5d27fc9eeac",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "check_id": "check-3f624ca0-ab91-4687-b5e5-70786cbdd573",
+          "prediction": {
+            "value": 1,
+            "reason": "Both retries now use the stable order ID.",
+            "assistance": "",
+            "provenance": "test_fixture",
+            "references": [
+              {
+                "path": "payment.py",
+                "start_line": 31,
+                "end_line": 33,
+                "sha256": "9b3ea282cea2baea83cddaca1573461e97fa526b87a7741155b845161e946838",
+                "citation": "payment.py:31-33"
+              }
+            ],
+            "question": "After the first reply is lost, how many charges will this order create?",
+            "field": "charge_count",
+            "argv": [
+              "scope",
+              "demo-adapter",
+              "probe"
+            ]
+          }
+        }
+      }
+    ],
+    "observations": [
+      {
+        "ts": "2026-09-12T19:59:43.857373+00:00",
+        "event": "observation",
+        "fields": {
+          "task_id": "task-34b194f5-b00c-4272-8642-e5d27fc9eeac",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "check_id": "check-6eabf4cb-809a-414e-9709-c9f635c3a116",
+          "observation": {
+            "status": "mismatched",
+            "field": "charge_count",
+            "expected": 1,
+            "reason": "The observed field differs from the saved prediction for this source version; investigate the assumption.",
+            "references": [
+              {
+                "path": "payment.py",
+                "start_line": 31,
+                "end_line": 33,
+                "sha256": "c8aad649549873f26945d94de4977cb14221daf239e1ab267c2e3fa0385ca85f",
+                "citation": "payment.py:31-33"
+              }
+            ],
+            "source_status": {
+              "status": "current",
+              "files": [
+                {
+                  "path": "payment.py",
+                  "status": "current",
+                  "reason": "supporting source hash and lines match"
+                }
+              ]
+            },
+            "execution_timestamp": "2026-09-12T19:59:43.347757+00:00",
+            "actual": 2,
+            "check_id": "check-6eabf4cb-809a-414e-9709-c9f635c3a116"
+          }
+        }
+      },
+      {
+        "ts": "2026-09-12T20:00:17.752871+00:00",
+        "event": "observation",
+        "fields": {
+          "task_id": "task-34b194f5-b00c-4272-8642-e5d27fc9eeac",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "check_id": "check-3f624ca0-ab91-4687-b5e5-70786cbdd573",
+          "observation": {
+            "status": "matched",
+            "field": "charge_count",
+            "expected": 1,
+            "reason": "The observed field matches the saved prediction for this source version.",
+            "references": [
+              {
+                "path": "payment.py",
+                "start_line": 31,
+                "end_line": 33,
+                "sha256": "9b3ea282cea2baea83cddaca1573461e97fa526b87a7741155b845161e946838",
+                "citation": "payment.py:31-33"
+              }
+            ],
+            "source_status": {
+              "status": "current",
+              "files": [
+                {
+                  "path": "payment.py",
+                  "status": "current",
+                  "reason": "supporting source hash and lines match"
+                }
+              ]
+            },
+            "execution_timestamp": "2026-09-12T20:00:17.307330+00:00",
+            "actual": 1,
+            "check_id": "check-3f624ca0-ab91-4687-b5e5-70786cbdd573"
+          }
+        }
+      }
+    ],
+    "executions": [
+      {
+        "ts": "2026-09-12T19:59:43.638883+00:00",
+        "event": "execution",
+        "fields": {
+          "task_id": "task-34b194f5-b00c-4272-8642-e5d27fc9eeac",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "check_id": "check-6eabf4cb-809a-414e-9709-c9f635c3a116",
+          "execution": {
+            "argv": [
+              "scope",
+              "demo-adapter",
+              "probe"
+            ],
+            "cwd": "/Users/soham/Scope-Agent/.tools/submission-video/take-eaca8721/checkout",
+            "timestamp": "2026-09-12T19:59:43.347757+00:00",
+            "exit_code": 0,
+            "stdout": "{\"attempt_keys\": [\"demo-order-attempt-1\", \"demo-order-attempt-2\"], \"charge_count\": 2, \"charged_cents\": 200, \"fixture\": \"disposable in-memory payment retry\", \"lost_acknowledgements\": 1, \"order_id\": \"demo-order\"}\n",
+            "stderr": "",
+            "timed_out": false,
+            "stdout_truncated": false,
+            "stderr_truncated": false,
+            "error": null,
+            "cleanup_incomplete": false
+          }
+        }
+      },
+      {
+        "ts": "2026-09-12T20:00:17.539357+00:00",
+        "event": "execution",
+        "fields": {
+          "task_id": "task-34b194f5-b00c-4272-8642-e5d27fc9eeac",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "check_id": "check-3f624ca0-ab91-4687-b5e5-70786cbdd573",
+          "execution": {
+            "argv": [
+              "scope",
+              "demo-adapter",
+              "probe"
+            ],
+            "cwd": "/Users/soham/Scope-Agent/.tools/submission-video/take-eaca8721/checkout",
+            "timestamp": "2026-09-12T20:00:17.307330+00:00",
+            "exit_code": 0,
+            "stdout": "{\"attempt_keys\": [\"demo-order\", \"demo-order\"], \"charge_count\": 1, \"charged_cents\": 100, \"fixture\": \"disposable in-memory payment retry\", \"lost_acknowledgements\": 1, \"order_id\": \"demo-order\"}\n",
+            "stderr": "",
+            "timed_out": false,
+            "stdout_truncated": false,
+            "stderr_truncated": false,
+            "error": null,
+            "cleanup_incomplete": false
+          }
+        }
+      }
+    ],
+    "next_tasks": [
+      {
+        "ts": "2026-09-12T20:00:00.118368+00:00",
+        "event": "next_task",
+        "fields": {
+          "task_id": "task-34b194f5-b00c-4272-8642-e5d27fc9eeac",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "handoff": {
+            "handoff_id": "handoff-991bda07-9feb-491a-827f-b5fdd81a3622",
+            "choice": "smaller",
+            "instruction": "SCRIPTED FIXTURE: change retry_key to return order_id, preserving distinct order identities.",
+            "target": "current_agent",
+            "status": "selected",
+            "provenance": "test_fixture",
+            "created_at": "2026-09-12T20:00:00.072748+00:00"
+          }
+        }
+      }
+    ],
+    "dispatches": [
+      {
+        "ts": "2026-09-12T20:00:00.256849+00:00",
+        "event": "dispatch",
+        "fields": {
+          "task_id": "task-34b194f5-b00c-4272-8642-e5d27fc9eeac",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "handoff_id": "handoff-991bda07-9feb-491a-827f-b5fdd81a3622",
+          "status": "dispatched",
+          "target": "current_agent",
+          "instruction": "SCRIPTED FIXTURE: change retry_key to return order_id, preserving distinct order identities.",
+          "reason": "delivery acknowledged"
+        }
+      }
+    ],
+    "skipped_checks": [],
+    "deferred_tasks": [],
+    "revocations": [
+      {
+        "ts": "2026-09-12T20:00:23.070747+00:00",
+        "event": "scopes_revoked",
+        "fields": {
+          "generation": 1,
+          "source": "watcher",
+          "session": "demo-95e9d6b9-0cfa-422f-98e7-55472978071c",
+          "revoked": true
+        }
+      }
+    ],
+    "meaning": "Historical debugging evidence tied to source versions, not general mastery. Predictions are not execution consent or grants. An execution record must be inspected for exit, timeout, truncation and errors; selection and dispatch do not prove completion. Current source validity requires a fresh knowledge check."
+  },
+  "meaning": "Scope permission decisions are not proof of execution. Native approval answers and commands outside Scope's observed requests remain unknown. Counts describe the available records only.",
+  "input": {
+    "status": "complete",
+    "malformed_records": 0,
+    "max_bytes": 33554432
+  },
+  "host": "codex",
+  "coverage": {
+    "status": "not_requested",
+    "meaning": "Native handling and execution remain unknown; no policy audit was run."
+  },
+  "event_fingerprint": "7b24a85e84187c05128cf8c8c9590645115253548fded048cd4c1ad970f68b2d",
+  "written_at": "2026-09-12T20:00:29.099467+00:00"
+}

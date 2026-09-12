@@ -15,6 +15,12 @@ Permission is not proof of execution. Predictions are not consent or mastery.
 Scope supplements the host's sandbox and approval controls. It uses your existing
 coding agent and requires no separate model API key or service account.
 
+[Watch the two-minute demo](submission/scope-submission-captioned.mp4),
+read the [Soham/Arjun speaking script](submission/soham-arjun-script.md), or
+download the [complete submission kit](submission/scope-submission-kit.zip).
+The recording shows both workflows using actual Scope terminal viewports and a
+scripted local checkout fixture. See [recording details](submission/README.md).
+
 ## Install and check locally
 
 With Python 3.11+ and uv available, these commands work in POSIX and PowerShell:
