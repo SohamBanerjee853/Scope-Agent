@@ -229,3 +229,21 @@ full-output replay confirmed no proposed receipt-size fix was needed.
 At verification, `origin/main` remained F0 `3d6144c`. No production modules or
 shared contracts changed, and no A2 workflow or CLI was implemented. Pull the
 merged main into `arjun_branch` before starting A2, per Arjun's sequence.
+
+## Integration audit and Windows lock-test correction
+
+[INTEGRATION-REVIEW.md](INTEGRATION-REVIEW.md) records hosted CI evidence and the
+A2/A3 handoff review. Reconciliation preserved Arjun's five production modules
+and event contract exactly. Soham fixed the initial CI context error in his
+integration branch; no duplicate workflow patch was pushed here.
+
+The first actual Windows test run exposed a platform-specific newline assumption
+in Arjun's lock test. Its readiness pipe now uses text/newline normalization and
+explicit LF/CRLF cases; contention and crashed-owner release checks remain intact.
+The full local suite passed **180 tests, 0 skipped**, on Python 3.14.7 (20.67 seconds)
+and 3.11.16 (20.62 seconds). A fresh Windows run of this correction remains pending.
+
+A real local watcher plus labeled simulated terminal input reproduced a separate
+pending-direct-question revocation gap in partial A3. The review documents that
+gap for the UI/engine handoff, without changing Soham's UI, executing a probe or
+claiming human consent. A2 remains gated on pulling the requested main merge.

@@ -20,6 +20,12 @@ and three independent fake-payment fixture tests, without changing production
 modules. That tip is also merged with history preserved. His brief explicitly
 waits for main reconciliation before implementing the proposed A2 APIs.
 
+A final branch fetch found `84a2e7f1a4365da853e636fb02a59c98640cbb1a`, with
+Arjun's integration audit, a manual direct-question revocation diagnostic and
+LF/CRLF coverage for his real crashed-owner lock test. The overlapping readiness
+assertion is resolved to his complete parametrized test. This newer tip is also
+preserved in the merge; it contains no A2 engine implementation.
+
 The published main foundation is the canonical nested `{ts,event,fields}` event
 schema, safe session-/sha256- filenames, lazy CLI dispatch and missing-feature
 exit code 1. Arjun's five production modules work against those APIs unchanged;
@@ -48,7 +54,7 @@ Permission counts stay separate from prediction/execution evidence. Watcher
 revocations now include factual session/revoked fields consumed by that summary.
 The offline permission fixture loads the summary without fabricating predictions.
 
-A3 provides start/checkpoint/knowledge, shared revoke, direct tagged/headless IPC
+A3 provides start/checkpoint/knowledge, shared revoke, authenticated watcher
 questions, the project understanding skill, disposable demo preparation and the
 narrow payment probe adapter. The real fake-payment regression observes two
 charges before the stable-key repair and one after it. User edits and nonempty
@@ -60,6 +66,21 @@ until Arjun publishes A2's actual APIs. See [A2/A3 coordination](A2-A3-COORDINAT
 No substitute consent engine, invented function signature, model SDK, live host,
 global installation, service account or sponsor integration was added. The
 Codex/Claude pane launchers and full I1/I1L rehearsal are still future work.
+
+Arjun's final audit reproduced a direct-terminal answer surviving shared revoke.
+The A3 question helper now sends every question through the existing watcher
+protocol, as required by the frozen interface. There is no separate terminal
+reader or new revocation state. Callers need an interactive `scope watch`; absence
+returns an explicit error. Existing watcher generation checks reject late answers
+after revoke or shutdown. This supersedes the reviewed direct route described in
+[Arjun's historical audit](INTEGRATION-REVIEW.md). Route provenance does not turn
+injected fixture answers into human evidence or a durable execution authorization.
+
+The updated standalone diagnostic returned exit 0 / `late_answer_rejected`:
+the real watcher generation advanced from 0 to 1, its tagged question context
+became inactive, and the late fixture answer was absent. The diagnostic also
+forbade caller-side terminal reads and observed zero probes or child processes.
+Its input was explicitly simulated; no human answer was claimed.
 
 ## Validation stages
 
@@ -97,5 +118,16 @@ wire assertions remain unchanged. Native CI must verify the smoke fix.
 
 After those fixes and Arjun's preparation merge, the full local suite passed
 **1,241 tests, 0 skipped**, in 51.94 seconds, and both package archives built.
-The next hosted run remains pending at this commit. Completed evidence will be
-recorded with the main merge; local execution does not establish Windows support.
+Hosted run [34706718164](https://github.com/SohamBanerjee853/Scope-Agent/actions/runs/34706718164)
+on `1cb66425a7c29f71b09be858850b0298eac397d2` then passed **1,241 tests,
+0 skipped** on both Windows 2025 (60.35 seconds) and macOS 15 (35.44 seconds).
+Both jobs also passed build, installed-package provenance/resources, both offline
+smoke dialects and their native wrapper dry-run. The Windows smoke fix is thus
+verified on its native host. This run predates Arjun's final audit and the direct
+question cancellation correction; those changes require fresh validation.
+
+The final Arjun audit merge plus watcher-only question fix passed **1,246 tests,
+0 skipped**, locally in 53.85 seconds. Both package archives built. The focused
+UI suite passed 70 tests, including real tagged watcher answers, shared revoke
+and shutdown rejecting late answers, and explicit missing/noninteractive watcher
+errors. The final commit's hosted results will be linked in the merge handoff.

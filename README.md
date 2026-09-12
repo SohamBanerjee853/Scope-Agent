@@ -84,6 +84,10 @@ skill while preserving local edits. Demo preparation only writes a new/empty
 directory, initializes its own Git repository and installs that skill. It uses a
 fresh demo identity regardless of any inherited coding session.
 
+The question UI uses the interactive `scope watch` terminal for every answer, so
+shared revoke also cancels pending questions. Without that watcher it returns an
+explicit unavailable error.
+
 The demo's initial bug charges one fake order twice when an acknowledgement is
 lost. Changing the retry key to the stable order ID produces one charge. From the
 prepared project, `scope demo-adapter probe` runs only the bundled fixture or that

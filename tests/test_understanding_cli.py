@@ -2,9 +2,11 @@
 
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 import io
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import threading
@@ -13,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from scope import learning, learning_cli, log, storage, ui, watch_ui
+from scope import ipc, learning, learning_cli, log, storage, ui, watch_ui
 from scope.watch import Watcher
 
 
@@ -40,12 +42,39 @@ class ScriptedTerminal(watch_ui.TerminalUI):
         super().__init__(io.StringIO(), io.StringIO())
         self.lines = deque(lines)
         self.discarded = False
+        self.discarded_event = threading.Event()
 
     def _line(self, context):
-        return self.lines.popleft() if self.lines else None
+        line = self.lines.popleft() if self.lines else None
+        return line(self) if callable(line) else line
+
+    def tagged(self, answer):
+        tags = re.findall(r"Reply with (\d+-[0-9a-f]{8}) followed by", self.output.getvalue())
+        assert tags, "the real watcher must display a fresh reply tag"
+        return tags[-1] + " " + answer
 
     def _discard(self):
         self.discarded = True
+        self.discarded_event.set()
+
+
+class ForbiddenCallerTerminal:
+    """A TTY-like caller stream must never become a separate question reader."""
+
+    def isatty(self):
+        return True
+
+    def read(self, *args, **kwargs):
+        pytest.fail("caller-side terminal input is forbidden")
+
+    readline = read
+    fileno = read
+
+    def write(self, *args, **kwargs):
+        pytest.fail("caller-side question output is forbidden")
+
+    def flush(self):
+        pass
 
 
 def test_start_checkpoint_knowledge_cli_uses_real_a1_evidence(repo, capsys):
@@ -231,32 +260,78 @@ def test_question_invalid_text_never_sends(field, value):
     assert "error" in result
 
 
-def test_interactive_question_uses_tagged_reader_and_distinct_provenance(monkeypatch):
-    terminal = ScriptedTerminal(["old-tag unrelated answer", "1-fixturetag Labeled fixture: 2"])
-    monkeypatch.setattr(watch_ui.secrets, "token_hex", lambda size: "fixturetag")
-    monkeypatch.setattr(ui, "TerminalUI", lambda *args: terminal)
-    result = ui.ask("Predict\x1b[2J", repo="fixture", context="source\x1b[31m")
-    assert result == {"answer": "Labeled fixture: 2", "provenance": "human_terminal"}
+def test_interactive_caller_uses_only_tagged_watcher_reader(monkeypatch):
+    terminal = ScriptedTerminal(["old-tag unrelated answer",
+                                 lambda terminal: terminal.tagged("Labeled fixture: 2")])
+    caller_terminal = ForbiddenCallerTerminal()
+    monkeypatch.setattr(sys, "stdin", caller_terminal)
+    with Watcher(ui=terminal) as watcher:
+        result = ui.ask("Predict\x1b[2J", repo="fixture", context="source\x1b[31m",
+                        input_stream=caller_terminal, output_stream=caller_terminal)
+        assert watcher.store.sessions() == ()
+    assert result == {"answer": "Labeled fixture: 2", "provenance": "human_ipc"}
     output = terminal.output.getvalue()
     assert "Ignored untagged or expired" in output
     assert "\x1b" not in output
     assert "does not grant command permission" in output
 
 
-def test_interactive_cancellation_discards_late_answer(monkeypatch):
-    cancelled = threading.Event()
+@pytest.mark.parametrize("control", ["revoke", "shutdown"])
+def test_interactive_caller_rejects_late_tagged_answer_after_shared_cancellation(control, monkeypatch):
+    entered, release = threading.Event(), threading.Event()
     terminal = ScriptedTerminal([])
+    caller_terminal = ForbiddenCallerTerminal()
+    contexts = []
 
     def line(context):
-        cancelled.set()
-        return "1-fixturetag Labeled late fixture"
+        contexts.append(context)
+        entered.set()
+        assert release.wait(timeout=4), "test fixture was not released"
+        return terminal.tagged("Labeled late fixture after shared cancellation")
 
     terminal._line = line
-    monkeypatch.setattr(watch_ui.secrets, "token_hex", lambda size: "fixturetag")
-    monkeypatch.setattr(ui, "TerminalUI", lambda *args: terminal)
-    result = ui.ask("Predict", repo="fixture", cancelled=cancelled)
+    monkeypatch.setattr(sys, "stdin", caller_terminal)
+    with Watcher(ui=terminal) as watcher, ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(ui.ask, "Predict", repo="fixture", timeout=5,
+                             input_stream=caller_terminal, output_stream=caller_terminal)
+        try:
+            assert entered.wait(timeout=2)
+            assert not future.done()
+            if control == "revoke":
+                assert learning_cli.revoke("fixture-tagged-revoke")["revoked"] is True
+            else:
+                assert ipc.exchange({"kind": "shutdown"}, timeout=2) == {"stopped": True}
+            assert not contexts[0].active()
+        finally:
+            release.set()
+        result = future.result(timeout=2)
+        assert terminal.discarded_event.wait(timeout=2)
+        assert "error" in result and "answer" not in result
+        assert watcher.store.sessions() == ()
+
+
+@pytest.mark.parametrize("watcher_present", [False, True], ids=["missing", "noninteractive"])
+def test_interactive_caller_without_human_watcher_gets_actionable_error(watcher_present, monkeypatch):
+    caller_terminal = ForbiddenCallerTerminal()
+    monkeypatch.setattr(sys, "stdin", caller_terminal)
+    reviewer = watch_ui.TerminalUI(io.StringIO(), io.StringIO())
+    with Watcher(ui=reviewer) if watcher_present else nullcontext():
+        result = ui.ask("Predict", repo="fixture", timeout=2,
+                        input_stream=caller_terminal, output_stream=caller_terminal)
+    assert "answer" not in result
+    assert "start scope watch in an interactive terminal" in result["error"]
+    assert reviewer.output.getvalue() == ""
+
+
+def test_caller_cancellation_during_exchange_suppresses_returned_answer():
+    cancelled = threading.Event()
+
+    def cancelled_exchange(*args, **kwargs):
+        cancelled.set()
+        return {"answer": "Labeled fixture returned after caller cancellation"}
+
+    result = ui.ask("Predict", repo="fixture", cancelled=cancelled, exchange=cancelled_exchange)
     assert "error" in result and "answer" not in result
-    assert terminal.discarded
 
 
 def test_pre_cancelled_question_and_transport_exception_have_no_answer():

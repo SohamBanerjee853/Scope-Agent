@@ -12,15 +12,23 @@ signatures and three fixture tests. It explicitly waits for this main merge
 before A2 implementation. These proposed boundaries inform the next adapter work;
 they do not yet supply a callable engine or final callback/result schemas.
 
+His follow-up `84a2e7f1a4365da853e636fb02a59c98640cbb1a` adds an integration
+review and direct-question revocation diagnostic, plus LF/CRLF lock-test coverage.
+It still contains no A2 engine. The audit also confirms that successful check/next
+CLI result handling must be implemented alongside the eventual real adapters.
+
 ## Available A3 work
 
 - learning_cli.py calls the existing learning.start/checkpoint/knowledge APIs.
 - `scope revoke` sends the shared revoke IPC operation and records whether the
   watcher actually confirmed it; historical debugging knowledge is retained.
 - ui.ask(prompt, *, repo, context="", home=None, timeout=105, ...) returns an
-  actual answer plus human_terminal/human_ipc provenance, or an explicit error.
-  Direct terminal input uses reply tags and bounded cancellation; headless input
-  uses the real watcher question protocol. ui.show displays bounded escaped text.
+  actual answer plus human_ipc route provenance, or an explicit error. All callers
+  use the authenticated watcher question protocol; only an interactive watcher
+  reads tagged terminal input. Start `scope watch` before asking questions. Shared
+  revoke and shutdown invalidate pending answers through the existing generation
+  guards. ui.show displays bounded escaped text. Injected fixture responses still
+  need explicit test_fixture evidence; a transport route alone proves no human.
 - `scope skill` shows the packaged understanding guidance; `--install` writes
   `.agents/skills/scope-understand/SKILL.md`, preserving edits, with `--dry-run`.
 - `scope demo --prepare-only DIRECTORY` creates the packaged disposable payment
