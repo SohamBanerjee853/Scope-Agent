@@ -1,7 +1,8 @@
 # Soham checkpoints
 
-The current milestone is S2, recorded below. The S1 section is historical evidence
-for handoff commit `54f39c769df4603e7bae8fb7b63d823657c15662`.
+The current milestone is S3, recorded below. S1 and S2 are historical evidence
+for handoff commits `54f39c769df4603e7bae8fb7b63d823657c15662` and
+`20b2024ff1e0609c1833d73e947eb2d4d0e762e2` respectively.
 
 ## S1 (historical)
 
@@ -129,7 +130,7 @@ merge this exact tested S1 commit (preserving history) into his separate branch
 before A2; A1 remains independent. No IPC fields or frozen callable contract
 changes are proposed in S1.
 
-## S2: bounded grants and the human watcher
+## S2 (historical): bounded grants and the human watcher
 
 Implemented September 12, 2026 on `work/soham-permissions`, on top of S1
 `54f39c769df4603e7bae8fb7b63d823657c15662`. The commit containing this addition is
@@ -271,3 +272,162 @@ remain separately coordinated later proposals, not S2 scope. No React framework,
 model SDK or remote approval engine was introduced. The linked event page returned
 HTTP 403 when checked; event rules and sponsor claims were not independently
 verified in this milestone.
+
+## S3: installation, receipts and offline smoke
+
+Completed September 12, 2026 on `work/soham-permissions`, based on S2 commit
+`20b2024ff1e0609c1833d73e947eb2d4d0e762e2`. The commit containing this section is
+the S3 checkpoint; its pushed SHA is recorded in the handoff response. This does
+not merge the feature branch into main or complete the S4 review.
+
+### Manual installation and permission skill
+
+`scope install --dry-run` prints the proposed hooks without creating files. The
+default destination is `CODEX_HOME/hooks.json`; `--project PATH` explicitly
+targets that project's `.codex/hooks.json`. Actual installation uses an absolute
+Scope console script from the running Python environment, with independently
+quoted POSIX `command` and PowerShell `commandWindows` strings. PermissionRequest
+matches Bash/PowerShell with a 110-second timeout; Stop and SessionEnd use three
+seconds. No executable path assumes a checkout named `.venv`.
+
+Installation preserves unrelated hooks, backs up exact prior bytes, and replaces
+the configuration atomically under an installer lock. An identical installation
+is unchanged. An exact generated installation can switch to passive `--abstain`;
+edited, older, mixed or duplicate Scope entries require explicit migration.
+Visible user/project JSON and TOML configurations are checked for duplicates;
+this is not an exhaustive managed/plugin hook audit. Nonregular files, links,
+ambiguous JSON and replacement during reading are refused. A stale installer
+lock after a crash requires inspection; it is not removed using a PID guess.
+Persistent `--always-allow` installation is refused.
+
+The installed Codex CLI reported **0.154.0**. Its local help and the current
+[official hook documentation](https://learn.chatgpt.com/docs/hooks) were checked.
+All matching permission hooks contribute: a denial takes precedence, otherwise
+an allow can permit the request. A passive Scope hook cannot cancel another
+hook's allow. Hooks run only for requests needing native approval. Installation
+does not establish trust: review the exact definitions in `/hooks` and restart
+as required. Native hook execution was not tested during S3.
+
+`scope install-skill --dry-run` previews the bundled permission skill; the default
+`CODEX_HOME/skills/scope-permissions/SKILL.md` is retained as a compatibility
+location. `--project PATH` uses `.agents/skills/scope-permissions/SKILL.md`, matching
+the project location in the current
+[official skill documentation](https://learn.chatgpt.com/docs/build-skills).
+Native discovery of either installed skill was not exercised; check `/skills`
+before relying on it. Existing edited skills are preserved. The skill explains
+bounded proposals, actual session identity, separate human approval, T3 limits
+and untrusted source/tool/transcript excerpts. It introduces no model client.
+
+Safe preview and offline commands, valid from either shell:
+
+```text
+uv run scope install --dry-run
+uv run scope install --project . --abstain --dry-run
+uv run scope install-skill --project . --dry-run
+uv run scope smoke --dry-run
+uv run scope smoke --shell powershell --dry-run
+uv run scope smoke --json
+uv run scope smoke --shell powershell --json
+```
+
+### Lifecycle and receipt evidence
+
+Stop reads bounded lifecycle JSON, appends `stop` with `status=turn_stopped`, and
+attempts a watcher notice with a 0.25-second deadline. SessionEnd only appends
+`session_end` with `status=ended`; it performs no network, rendering, transcript
+read or native policy evaluation. Neither hook emits a decision. All hook
+exceptions abstain with empty stdout and exit zero. These events use the native
+input's session_id, never an inherited parent session identifier.
+
+`scope receipt SESSION --home PATH [--json]` writes/replays a schema-1 projection.
+Requests and grants correlate by their internal IDs; hook and watcher records
+are not counted twice. Conflicting context/decisions remain unknown. An observed
+T2 allow with missing review provenance remains an allow with unknown category,
+instead of inventing automatic reuse or a one-time choice. Failed watcher grant
+delivery is excluded. Native decisions and command execution remain unknown.
+Lifecycle status is independent of permission counts.
+
+The understanding object calls `understanding_summary.summarize(events)` through
+the frozen ten-field contract. In this branch the module is absent, so receipts
+explicitly say `pending_integration`. Tests inject the complete pure projection;
+a broken projection is an error, not silently discarded evidence. Schema-1
+receipts without understanding remain readable; `--rebuild` can add the summary
+from available events after integration. A stored receipt for another session is
+rejected.
+
+Receipt reads cap the session log at 32 MiB and skip malformed/incomplete records.
+The reader preserves the foundation `{ts,event,fields}` schema in a bounded helper:
+the frozen `log.read` has no size cap or home override. This is documented local
+adaptation, not a shared module change. Writer locks serialize atomic file
+replacement; raw evidence is never rewritten. Cached projections ignore
+`receipt_written`, include session identity, and are compared with the fresh
+projection before reuse, preventing stale/corrupted counts from surviving replay.
+Missing/truncated evidence is explicitly labeled.
+
+### Conservative native policy audit
+
+Audit is optional: `scope receipt SESSION --audit --transcript FILE --rules FILE`.
+Rules may be repeated; no native configuration or transcript discovery occurs.
+Use `--host claude` to label Claude receipts; Claude's Codex-specific coverage is
+always unknown and does not read those inputs. Without audit, native coverage is
+explicitly not requested.
+
+Transcript reads cap one regular file at 16 MiB, records at 128 KiB, and candidate
+commands at 1,000. Only supported shell tool requests with structured argv can
+reach `codex execpolicy check`; plain command strings and embedded code-mode
+JavaScript remain unknown. The candidate argv is data after `--`, never executed.
+The checker uses explicitly supplied current rules, with a shared five-second
+policy budget, capped stdout/stderr and bounded cleanup overhead. Unsupported
+native match formats, timeouts and missing helpers produce unknown findings.
+Candidates from log/transcript sources can overlap; audit counts are estimates,
+not permission counts or evidence of historical native answers/execution.
+
+The syntax was checked against local Codex help and the
+[official rules documentation](https://learn.chatgpt.com/docs/agent-configuration/rules).
+A read-only native check against one newly created synthetic `git status` rule
+returned an allow with matching prefix evidence under isolated homes. It did not
+run Git or launch a coding session. Native Windows requires a discoverable
+`codex.exe`; `.cmd` wrappers are refused to avoid implicit shell execution.
+
+### Actual verification and next dependency
+
+On macOS 14.8.4 / CPython 3.11.16 / uv 0.12.13:
+
+- Full suite: **952 passed, 0 skipped** in 14.88 seconds.
+- S3 additions: 44 installer, 27 lifecycle/receipt, 104 transcript/policy/audit,
+  and 18 smoke cases; the previous 759 cases remain. Parameterization checks
+  concrete malformed inputs and both shell dialects, not a desired test total.
+- `uv build` produced a source distribution and wheel. Noneditable wheel install
+  in `.tools/wheel-check`: **952 passed, 0 skipped** in 14.69 seconds, importing
+  from site-packages. Installed assets: allow.yaml 999 bytes, hard-ask.yaml 1,333
+  bytes, permission SKILL.md 3,345 bytes. The skill frontmatter validator passed.
+- Installed hook/skill dry-runs resolved the wheel environment's console script
+  and created no files. Both installed offline smoke dialects passed. The POSIX
+  wrapper and its dry-run were exercised; the PowerShell wrapper is provided,
+  but no native `pwsh` executable was available on this Mac.
+
+Each smoke uses a new demo UUID and disposable homes in a separate worker,
+removing inherited host/launch identities. The real TCP watcher and actual hook
+subprocesses observed four requests, two automatic allows, one scope grant and
+one synthetic T3 hard ask. Revocation blocked reuse with one budget unit still
+unused. Requested commands were never executed. SessionEnd and receipt replay
+used only that synthetic session; temporary homes were removed. Scripted fixture
+answers prove neither human understanding nor elapsed-time savings.
+
+`scope smoke --live --dry-run` prints the manual prerequisites: check the installed
+host, use on-request approval, explicit temporary prompt rules, invocation-only
+hooks and normal hook trust in a disposable project. `--live` alone refuses;
+native launch automation belongs to integration. No live/model session, global
+hook, skill, account or sponsor service was installed or launched during S3.
+Windows quoting/parser tables passed on macOS; native Windows hooks, ACLs,
+PowerShell wrapper execution, helper cleanup and sandbox behavior remain
+unverified. Host trust and actual permission interception remain human checks.
+
+Both private planning guides remain gitignored and excluded from package assets.
+The sponsor workflow still prioritizes S1–S4. Optional Exa explanation guidance
+is deferred until afterward; CopilotKit/web review, Ambiguous exports, new events
+and spending require later coordination. No sponsor dependency or SDK was added.
+
+Next: S4 permission-side review and final handoff. Arjun's understanding projection
+and the combined receipt remain I1 dependencies. Host launch cleanup, actual
+session registration and invocation-local Codex/Claude adapters remain I1L work.

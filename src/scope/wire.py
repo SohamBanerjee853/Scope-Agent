@@ -156,3 +156,20 @@ def decision_json(behavior: str | None, message: str | None = None) -> str:
         ensure_ascii=True,
         allow_nan=False,
     )
+
+
+def read_event(stream: BinaryIO | TextIO, expected: str) -> dict:
+    """Bounded lifecycle input, kept separate from permission decision parsing."""
+    raw = stream.read(MAX_INPUT_BYTES + 1)
+    data = raw.encode("utf-8") if isinstance(raw, str) else raw
+    if not isinstance(data, bytes) or len(data) > MAX_INPUT_BYTES:
+        raise ValueError("invalid lifecycle input")
+    value = json.loads(data.decode("utf-8"), object_pairs_hook=_object,
+                       parse_constant=_constant, parse_float=_float)
+    if not isinstance(value, dict) or value.get("hook_event_name", expected) != expected:
+        raise ValueError("unsupported lifecycle event")
+    result = {"session_id": _text(value.get("session_id"))}
+    for field in ("cwd", "transcript_path", "turn_id", "agent_id", "agent_type", "reason"):
+        if field in value:
+            result[field] = _text(value[field], optional=True)
+    return result
