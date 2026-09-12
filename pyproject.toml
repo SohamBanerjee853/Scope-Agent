@@ -20,7 +20,7 @@ dev = ["pytest>=8,<10"]
 packages = ["src/scope"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/docs", "/scripts", "/README.md", "/PLAIN.md", "/AGENTS.md", "/pyproject.toml", "/uv.lock"]
+include = ["/src", "/tests", "/docs", "/scripts", "/Makefile", "/README.md", "/PLAIN.md", "/AGENTS.md", "/pyproject.toml", "/uv.lock"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

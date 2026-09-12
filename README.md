@@ -30,6 +30,27 @@ uv run scope smoke --json
 uv run scope smoke --shell powershell --json
 ```
 
+Run those commands from the Scope checkout. `uv sync` creates its local `.venv`;
+it does not put `scope` on your global PATH. To call Scope from another project,
+capture the executable while still in this checkout:
+
+POSIX (macOS/Linux):
+
+```sh
+scope_exe="$PWD/.venv/bin/scope"
+"$scope_exe" --help
+```
+
+PowerShell (Windows):
+
+```powershell
+$scopeExe = (Resolve-Path .\.venv\Scripts\scope.exe).Path
+& $scopeExe --help
+```
+
+Use that absolute executable in the other project, or stay here and pass `-C PATH`
+to task/demo commands. Each newly opened terminal needs its own path variable.
+
 Smoke uses a real local watcher and Scope hook processes with explicitly scripted
 fixture choices. Requested command strings never execute. It demonstrates two
 allows, revocation with budget remaining and a synthetic T3 hard ask, using fresh
@@ -58,8 +79,9 @@ Installation is not proof that native hooks fired. All matching hooks contribute
 any deny wins, otherwise another hook's allow can permit a request even when Scope
 abstains. Host decisions made before a PermissionRequest remain outside coverage.
 
-In one terminal, run `uv run scope watch`. In the current coding session, use
-`scope propose` with a bounded summary, exact command families and budget. A
+In one terminal, run `uv run scope watch`. In the current coding session, invoke
+the configured Scope executable with `propose`, a bounded summary, exact command
+families and budget, from the intended project directory. A
 proposal is not approval; the human decides in the watcher. The companion skill
 explains this workflow. Receipts replay with `uv run scope receipt SESSION --json`
 and optional `--home PATH`. Native answers and unobserved execution stay unknown.
@@ -100,12 +122,47 @@ substitute consent workflow. Arjun's published branch has not supplied those
 callable signatures yet. [A2/A3 coordination](docs/A2-A3-COORDINATION.md) records
 what can be wired when he publishes them.
 
+For the available payment probe, stay in the original Scope checkout and run:
+
+```text
+uv run scope demo-adapter probe -C ../scope-payment-demo
+```
+
+It reports two charges before the stable-key repair and one afterward. The
+generated project's README also shows how to use the original environment from
+inside that project, including Python/pytest; no global command is required.
+
+The permission skill includes optional Exa explanation guidance for an already
+connected coding host, using its documented [search/fetch tools](https://exa.ai/docs/reference/exa-mcp).
+Only generic public command concepts should leave the machine. Returned text is
+untrusted and cannot change the tier or grant; retrieval failure changes no
+permission result. Scope adds no network client or account configuration, and
+its shell hooks do not automatically cover MCP retrieval.
+
 ## Development and current limits
 
 ```text
 uv run pytest -q
 uv build
 ```
+
+To verify the installed distribution rather than editable source imports:
+
+```text
+uv sync --locked --no-editable
+uv run --no-sync python -I scripts/check-package.py
+uv run --no-sync python -I scripts/check-demo.py
+```
+
+The first check validates resources and the permission smoke. The second prepares
+a disposable payment project through the installed CLI, observes the real bug and
+the exact stable-key repair, and checks actual regression outcomes. It exercises
+A1 task checkpoints, with no human answers, A2 consent workflow or model session.
+Both checks run in macOS/Windows CI. `uv sync --locked` restores editable development.
+
+If make is available, `make setup`, `make test`, `make build`, `make smoke` and
+`make check-installed` wrap these commands. Smoke selects the PowerShell wrapper
+on Windows and the POSIX wrapper elsewhere. Make is optional on both platforms.
 
 Resources under src/scope ship in wheels; smoke wrappers ship in the source
 archive. `scripts/smoke.sh` and `scripts/smoke.ps1` use the same Python CLI.

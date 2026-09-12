@@ -7,6 +7,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import shlex
 import stat
 import sysconfig
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -229,6 +230,77 @@ def test_oversize_existing_config_and_symlinks_refused(tmp_path):
         with pytest.raises(ValueError, match="symlinked"):
             install.install_hooks()
     assert other.read_text(encoding="utf-8") == "{}"
+
+
+@pytest.mark.parametrize("operation, project_mode", [
+    ("hooks", True), ("hooks", False), ("skill", True), ("skill", False),
+])
+@pytest.mark.parametrize("redirect_kind", ["symlink", "reparse"])
+def test_destination_redirects_rejected_without_writes_on_every_os(
+        isolated_project, tmp_path, monkeypatch, operation, project_mode, redirect_kind):
+    root = isolated_project if project_mode else codex_home()
+    if operation == "hooks":
+        target = (root / ".codex" if project_mode else root) / "hooks.json"
+        action = install.install_hooks
+    else:
+        target = (root / ".agents" if project_mode else root) / "skills" / "scope-permissions" / "SKILL.md"
+        action = install.install_skill
+    target.parent.mkdir(parents=True, exist_ok=True)
+    (root / "unrelated.txt").write_bytes(b"Preserve the user's existing files.\r\n")
+    before = {path.relative_to(tmp_path): path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    directories = [root]
+    for component in target.parent.relative_to(root).parts:
+        directories.append(directories[-1] / component)
+
+    # Inject filesystem metadata so Windows tests need no symlink privileges.
+    # Cover the selected root and every intermediate component, including
+    # .agents and skills, where checking only the final parent misses escapes.
+    for suspect in directories:
+        original_symlink = Path.is_symlink
+        original_lstat = Path.lstat
+        with monkeypatch.context() as patch:
+            if redirect_kind == "symlink":
+                patch.setattr(Path, "is_symlink", lambda path: path == suspect or original_symlink(path))
+            else:
+                def redirected_metadata(path):
+                    info = original_lstat(path)
+                    if path == suspect:
+                        return SimpleNamespace(st_mode=info.st_mode, st_file_attributes=0x400)
+                    return info
+
+                patch.setattr(Path, "lstat", redirected_metadata)
+            for dry_run in (True, False):
+                with pytest.raises(ValueError, match="destination directory"):
+                    action(project=isolated_project if project_mode else None, dry_run=dry_run)
+        assert not target.exists()
+        assert {path.relative_to(tmp_path): path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()} == before
+
+
+@pytest.mark.parametrize("operation", ["hooks", "skill"])
+def test_reparse_point_destination_file_is_rejected_without_changes(isolated_project, monkeypatch, operation):
+    if operation == "hooks":
+        target = isolated_project / ".codex" / "hooks.json"
+        action = install.install_hooks
+        data = b'{"hooks":{}}\r\n'
+    else:
+        target = isolated_project / ".agents" / "skills" / "scope-permissions" / "SKILL.md"
+        action = install.install_skill
+        data = files("scope").joinpath("skills", "scope-permissions", "SKILL.md").read_bytes()
+    target.parent.mkdir(parents=True)
+    target.write_bytes(data)
+    original = Path.lstat
+
+    def redirected_metadata(path):
+        info = original(path)
+        return SimpleNamespace(st_mode=info.st_mode, st_file_attributes=0x400) if path == target else info
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "lstat", redirected_metadata)
+        for dry_run in (True, False):
+            with pytest.raises(ValueError, match="reparse-point configuration or skill"):
+                action(project=isolated_project, dry_run=dry_run)
+    assert target.read_bytes() == data
+    assert list(target.parent.iterdir()) == [target]
 
 
 def test_existing_installer_lock_refused_without_configuration_write():

@@ -31,6 +31,16 @@ python payment.py
 python -m pytest -q
 ```
 
+For a fresh Scope source checkout, keep the original checkout path: this generated
+project has no virtual environment of its own. Use the original environment's
+absolute Python and Scope executables, or stay in the Scope checkout and run
+`uv run scope demo-adapter probe -C ../scope-payment-demo` (adjust the demo path).
+From this project, POSIX uses `/path/to/Scope-Agent/.venv/bin/python` and
+`/path/to/Scope-Agent/.venv/bin/scope`. PowerShell uses
+`& 'C:\path\to\Scope-Agent\.venv\Scripts\python.exe'` and
+`& 'C:\path\to\Scope-Agent\.venv\Scripts\scope.exe'`. Append the command's
+arguments; no global installation or execution-policy change is needed.
+
 Run them only under the task's actual execution authorization. The probe executes
 the fake service code in the calling process's environment. A watcher transports
 human answers and permission decisions; it does not run the probe.

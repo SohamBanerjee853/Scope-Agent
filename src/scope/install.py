@@ -100,6 +100,28 @@ def _absolute(path: str | Path) -> Path:
     return Path(path).expanduser().absolute()
 
 
+def _check_destination_directories(root: Path, target: Path) -> None:
+    """Reject redirected directories from the selected root to the target.
+
+    Ancestors above the explicitly selected project or CODEX_HOME are outside
+    this check; platform paths such as macOS /var may themselves be aliases.
+    """
+    current = root
+    for component in (None, *target.parent.relative_to(root).parts):
+        if component is not None:
+            current = current / component
+        if current.is_symlink():
+            raise ValueError(f"refusing a symlinked destination directory: {current}")
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        if getattr(info, "st_file_attributes", 0) & 0x400:
+            raise ValueError(f"refusing a reparse-point destination directory: {current}")
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError(f"destination must contain only directories: {current}")
+
+
 def _read(path: Path, limit: int) -> bytes | None:
     if path.is_symlink():
         raise ValueError(f"refusing a symlinked configuration or skill: {path}")
@@ -107,6 +129,8 @@ def _read(path: Path, limit: int) -> bytes | None:
         initial = path.lstat()
     except FileNotFoundError:
         return None
+    if getattr(initial, "st_file_attributes", 0) & 0x400:
+        raise ValueError(f"refusing a reparse-point configuration or skill: {path}")
     if not stat.S_ISREG(initial.st_mode):
         raise ValueError(f"configuration or skill must be a regular file: {path}")
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
@@ -226,7 +250,9 @@ def _merge(existing: dict, desired: dict, executable: Path) -> dict:
 
 
 @contextmanager
-def _write_lock(target: Path):
+def _write_lock(target: Path, *, root: Path | None = None):
+    if root is not None:
+        _check_destination_directories(root, target)
     if target.parent.is_symlink():
         raise ValueError(f"refusing a symlinked destination directory: {target.parent}")
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -271,11 +297,13 @@ def install_hooks(*, project: str | Path | None = None, dry_run: bool = False, a
     project_path = _absolute(project) if project is not None else None
     if project_path is not None and not project_path.is_dir():
         raise ValueError("--project must name an existing project directory")
-    target = (project_path / ".codex" if project_path is not None else _absolute(codex_home())) / "hooks.json"
+    root = project_path if project_path is not None else _absolute(codex_home())
+    target = (root / ".codex" if project_path is not None else root) / "hooks.json"
     executable = console_script()
     desired = hook_config(executable, abstain=abstain)
 
     def prepare():
+        _check_destination_directories(root, target)
         _check_other_layers(project_path, target)
         previous = _read(target, MAX_CONFIG_BYTES)
         current = _decode(previous)
@@ -287,7 +315,7 @@ def install_hooks(*, project: str | Path | None = None, dry_run: bool = False, a
     previous, report = prepare()
     if dry_run or not report["changed"]:
         return report
-    with _write_lock(target):
+    with _write_lock(target, root=root):
         previous, report = prepare()
         if report["changed"]:
             payload = (json.dumps(report["config"], indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
@@ -302,13 +330,15 @@ def install_skill(*, project: str | Path | None = None, dry_run: bool = False) -
     project_path = _absolute(project) if project is not None else None
     if project_path is not None and not project_path.is_dir():
         raise ValueError("--project must name an existing project directory")
-    directory = project_path / ".agents" / "skills" if project_path is not None else _absolute(codex_home()) / "skills"
+    root = project_path if project_path is not None else _absolute(codex_home())
+    directory = root / ".agents" / "skills" if project_path is not None else root / "skills"
     target = directory / "scope-permissions" / "SKILL.md"
     payload = files("scope").joinpath("skills", "scope-permissions", "SKILL.md").read_bytes()
     if len(payload) > MAX_SKILL_BYTES:
         raise ValueError("packaged permission skill is too large")
 
     def prepare():
+        _check_destination_directories(root, target)
         previous = _read(target, MAX_SKILL_BYTES)
         if previous is not None and previous != payload:
             raise ValueError(f"existing skill has local edits; preserved {target}")
@@ -318,7 +348,7 @@ def install_skill(*, project: str | Path | None = None, dry_run: bool = False) -
     report = prepare()
     if dry_run or not report["changed"]:
         return report
-    with _write_lock(target):
+    with _write_lock(target, root=root):
         report = prepare()
         if report["changed"]:
             _replace(target, payload, None)

@@ -131,3 +131,38 @@ The final Arjun audit merge plus watcher-only question fix passed **1,246 tests,
 UI suite passed 70 tests, including real tagged watcher answers, shared revoke
 and shutdown rejecting late answers, and explicit missing/noninteractive watcher
 errors. The final commit's hosted results will be linked in the merge handoff.
+
+## Independent work while A2 is pending
+
+The inspected Arjun tip was still `84a2e7f`; no A2 production module was changed.
+
+- Permission hook/skill installation now refuses existing symlink or Windows
+  reparse-point directories from the selected project/CODEX_HOME through the
+  destination, in dry-run and write paths. A disposable reproduction previously
+  wrote through `.agents` into an outside directory; it now refuses without an
+  outside write. Paths above the selected root remain outside this check.
+- The installed payment checker exercises the actual packaged CLI, fresh demo
+  preparation, real two-charge/one-charge probes, the exact stable-key repair,
+  and packaged regressions (one expected failure plus two passes, then three
+  passes). A1 captures the actual source change with only task_start and
+  task_checkpoint events. The checker records no prediction, consent or saved
+  understanding observation, and runs in both offline CI jobs.
+- Fresh-clone, packaged demo and skill instructions use the original virtual
+  environment explicitly when working from another project. Both skills remain
+  valid. The optional Makefile selects native smoke wrappers; it and the Python
+  checkers ship in the source archive.
+- The permission skill now contains optional Exa guidance:
+  generic public queries through already available host tools, official source
+  links, untrusted retrieved text, unchanged permission outcomes and explicit
+  shell-hook coverage limits. No Scope search command, SDK, account, paid
+  research call or live retrieval integration was added. Tool names were checked
+  against [Exa's official reference](https://exa.ai/docs/reference/exa-mcp).
+
+Validation: **1,256 tests passed, 0 skipped**, locally in 51.94 seconds; both
+archives built; the final noneditable wheel passed installed resource/permission
+smoke and payment checks. Skill frontmatter validation and POSIX `make smoke`
+passed; Windows Makefile routing was inspected without claiming a native run.
+The installed payment check also passed with injected parent host IDs and Git/
+pytest selectors, and refused an editable install. Hosted results are pending
+at this checkpoint and will be linked in the handoff. A2/A3-dependent commands,
+the full scripted rehearsal, launchers and live human/model checks remain pending.

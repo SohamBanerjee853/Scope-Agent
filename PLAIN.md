@@ -22,6 +22,12 @@ The offline permission smoke is available through `uv run scope smoke --json`.
 Its fixture decisions and synthetic git-push request are labeled; it executes no
 requested commands and demonstrates no human understanding or time savings.
 
+The installed payment-fixture check also runs the real fake-payment code and its
+regressions before and after the stable-key repair. It verifies the packaged demo
+and saved source context while the A2 prediction/consent engine is still pending.
+Optional Exa guidance lets the current host explain a public command concept with
+a source link; an explanation never changes Scope's permission decision.
+
 Scope uses the person's current coding agent, without another model API key. It
 preserves the host's sandbox, approval settings and normal hook trust. The planned
 Codex/Claude launchers with agent and review panes are not implemented yet.

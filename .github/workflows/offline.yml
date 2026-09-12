@@ -65,6 +65,9 @@ jobs:
       - name: Exercise installed permission smoke for both dialects
         run: uv run --no-sync python -I scripts/check-package.py
 
+      - name: Verify installed payment fixture and source checkpoints
+        run: uv run --no-sync python -I scripts/check-demo.py
+
       - name: Check the POSIX smoke wrapper
         if: runner.os == 'macOS'
         run: sh scripts/smoke.sh --dry-run

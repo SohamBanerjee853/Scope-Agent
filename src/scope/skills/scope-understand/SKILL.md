@@ -9,6 +9,11 @@ start a different Codex or Claude session, create a model client, or ask for an
 API key. A useful diagnosis and a verified repair are the objective; a quiz score
 or generalized mastery claim is not.
 
+Use the configured Scope executable. For a source checkout, `uv run scope` works
+from that checkout; from the debugging project use its absolute `.venv/bin/scope`
+path (Windows: `.venv/Scripts/scope.exe`). A global `scope` command is not assumed.
+Keep the debugging project's working directory or pass it explicitly with `-C`.
+
 Recover the relevant source, recent changes, and available observations before
 repeating a debugging attempt. Run `scope start` before edits to record the task
 and source baseline. These commands use the current directory unless `-C PATH`
@@ -43,8 +48,8 @@ Never fabricate an observation, approval, or successful-looking check to fill
 the gap.
 
 The probe runs through the bounded caller-side runner only after explicit
-execution consent. T3 probes are rejected. A noninteractive caller routes the
-human question through Scope's watcher; an absent reviewer is an error or skip.
+execution consent. T3 probes are rejected. Every caller routes the human question
+through an interactive `scope watch`; an absent reviewer is an error or skip.
 The watcher carries human answers and does not execute probe subprocesses. Keep
 the coding host's sandbox and approval policy unchanged.
 
