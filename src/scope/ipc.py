@@ -2,7 +2,8 @@
 
 This module transports JSON only: handlers own every logical decision. A token is
 same-user coordination, not a boundary against another process owned by that user.
-No connection or failed request is retried. The lifetime lock is never unlinked;
+No sent request is retried. Valid launches may use a private file mailbox when
+TCP connection establishment fails. The lifetime lock is never unlinked;
 removing a lock inode would allow two watchers to own different locks at once.
 """
 
@@ -28,6 +29,7 @@ from scope.paths import scope_home
 
 MAX_FRAME = 128 * 1024
 MAX_ENDPOINT = 4096
+MAX_SEEN_NONCES = 8192
 CONTROL_FRAME_TIMEOUT = 0.5
 ENDPOINT_NAME = "watch.json"
 LOCK_NAME = "watch.lock"
@@ -110,12 +112,16 @@ def _read_endpoint(home: Path) -> dict[str, Any]:
     if len(data) > MAX_ENDPOINT:
         raise ValueError("endpoint too large")
     endpoint = _json_object(data)
-    if (set(endpoint) != {"port", "token"}
-            or type(endpoint["port"]) is not int
-            or not 1 <= endpoint["port"] <= 65535
+    launched = set(endpoint) == {"port", "token", "launch_id", "mailbox"}
+    if (set(endpoint) != {"port", "token"} and not launched
+            or not (type(endpoint.get("port")) is int and 1 <= endpoint["port"] <= 65535
+                    or launched and endpoint.get("port") is None)
             or not isinstance(endpoint["token"], str)
             or not _TOKEN.fullmatch(endpoint["token"])):
         raise ValueError("invalid endpoint")
+    if launched and (not isinstance(endpoint["launch_id"], str) or not 1 <= len(endpoint["launch_id"]) <= 512
+                     or not isinstance(endpoint["mailbox"], str) or not _NONCE.fullmatch(endpoint["mailbox"])):
+        raise ValueError("invalid launch endpoint")
     return endpoint
 
 
@@ -151,23 +157,50 @@ def exchange(message: dict[str, Any], timeout: float = 105, *,
                 or not math.isfinite(timeout) or timeout <= 0):
             return None
         deadline = time.monotonic() + min(timeout, 105)
-        endpoint = _read_endpoint(_home(home))
+        directory = _home(home)
+        endpoint = _read_endpoint(directory)
+        launched = "launch_id" in endpoint
+        if launched or "SCOPE_LAUNCH_ID" in os.environ or "SCOPE_HOST" in os.environ:
+            from . import host_session
+
+            launch = host_session.current_launch()
+            if (not launched or launch is None or launch["launch_id"] != endpoint["launch_id"]
+                    or Path(launch["home"]) != directory.absolute()):
+                return None
         token = endpoint["token"]
         nonce = secrets.token_hex(16)
         frame = _encode({**message, "token": token, "nonce": nonce})
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(max(0.001, deadline - time.monotonic()))
+        sock = None
+        try:
+            if endpoint["port"] is None:
+                raise ConnectionError("launch watcher has no TCP listener")
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(max(0.001, min(1.0 if launched else 105, deadline - time.monotonic())))
             sock.connect(("127.0.0.1", endpoint["port"]))
-            sock.settimeout(max(0.001, deadline - time.monotonic()))
-            sock.sendall(frame)
-            reply = _receive(sock, deadline)
-            if (not isinstance(reply.get("token"), str)
-                    or not isinstance(reply.get("nonce"), str)
-                    or not hmac.compare_digest(reply["token"], token)
-                    or not hmac.compare_digest(reply["nonce"], nonce)):
+        except OSError:
+            if sock is not None:
+                sock.close()
+            if not launched:
                 return None
-            return {key: value for key, value in reply.items()
-                    if key not in {"token", "nonce"}}
+            from . import mailbox
+
+            reply = mailbox.exchange(directory, endpoint, frame, nonce, deadline)
+        else:
+            # Crossing this point forbids all retry/fallback, even if sendall
+            # raises after sending only part of the frame or the response fails.
+            with sock:
+                sock.settimeout(max(0.001, deadline - time.monotonic()))
+                sock.sendall(frame)
+                reply = _receive(sock, deadline)
+        if not isinstance(reply, dict):
+            return None
+        if (not isinstance(reply.get("token"), str)
+                or not isinstance(reply.get("nonce"), str)
+                or not hmac.compare_digest(reply["token"], token)
+                or not hmac.compare_digest(reply["nonce"], nonce)):
+            return None
+        return {key: value for key, value in reply.items()
+                if key not in {"token", "nonce"}}
     except Exception:
         # Hook callers must always be able to abstain on any transport failure.
         return None
@@ -198,11 +231,20 @@ class Context:
     after_reply: Callable[[], None] | None = None
     delivered: bool = False
     _socket: socket.socket | None = field(default=None, repr=False)
+    _alive: Callable[[], bool] | None = field(default=None, repr=False)
 
     def active(self) -> bool:
         if self.cancelled.is_set() or time.monotonic() >= self.deadline:
             self.cancelled.set()
             return False
+        if self._alive is not None:
+            try:
+                if not self._alive():
+                    self.cancelled.set()
+                    return False
+            except Exception:
+                self.cancelled.set()
+                return False
         if self._socket is not None:
             try:
                 readable, _, exceptional = select.select(
@@ -236,7 +278,7 @@ class Server:
                  home: str | os.PathLike[str] | None = None,
                  request_timeout: float = 95, max_clients: int = 16,
                  admission: Callable[[dict[str, Any], Context], Any] | None = None,
-                 control_kinds: frozenset[str] = frozenset()):
+                 control_kinds: frozenset[str] = frozenset(), launch_id: str | None = None):
         if (isinstance(request_timeout, bool)
                 or not isinstance(request_timeout, (int, float))
                 or not math.isfinite(request_timeout) or not 0 < request_timeout <= 95):
@@ -253,6 +295,7 @@ class Server:
         self.request_timeout = request_timeout
         self.max_clients = max_clients
         self.control_kinds = frozenset(control_kinds)
+        self.launch_id = launch_id
         self.address: tuple[str, int] | None = None
         self._token = secrets.token_hex(32)
         self._lock_fd: int | None = None
@@ -263,13 +306,21 @@ class Server:
         self._contexts: set[Context] = set()
         self._slots = threading.BoundedSemaphore(max_clients)
         self._control_slot = threading.BoundedSemaphore(1)
+        self._mailbox = None
+        self._seen_nonces: set[str] = set()
 
     def start(self) -> Server:
         with self._mutex:
-            if self._listener is not None:
+            if self._lock_fd is not None:
                 return self
             if self._closed.is_set():
                 raise RuntimeError("a closed server cannot restart")
+            if self.launch_id is not None:
+                from . import host_session
+
+                launch = host_session.read_launch(self.home)
+                if launch["launch_id"] != self.launch_id or Path(launch["home"]) != self.home.absolute():
+                    raise ValueError("mailbox requires the matching private launch home")
             self.home.mkdir(parents=True, exist_ok=True, mode=0o700)
             info = self.home.lstat()
             if (not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode)
@@ -286,25 +337,43 @@ class Server:
                 raise
             temporary = self.home / (".watch-" + secrets.token_hex(16) + ".tmp")
             try:
-                listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self._listener = listener
-                if os.name == "nt":
-                    listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-                listener.bind(("127.0.0.1", 0))
-                listener.listen(self.max_clients)
-                listener.settimeout(0.1)
-                self.address = listener.getsockname()
+                try:
+                    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self._listener = listener
+                    if os.name == "nt":
+                        listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                    listener.bind(("127.0.0.1", 0))
+                    listener.listen(self.max_clients)
+                    listener.settimeout(0.1)
+                    self.address = listener.getsockname()
+                except OSError:
+                    if self._listener is not None:
+                        self._listener.close()
+                        self._listener = None
+                    if self.launch_id is None:
+                        raise
+                endpoint = {"port": self.address[1] if self.address is not None else None,
+                            "token": self._token}
+                if self.launch_id is not None:
+                    from . import mailbox
+
+                    generation = secrets.token_hex(16)
+                    self._mailbox = mailbox.Listener(self, generation)
+                    endpoint.update(launch_id=self.launch_id, mailbox=generation)
                 fd = _private_open(temporary, create=True, exclusive=True, writable=True)
                 with os.fdopen(fd, "wb") as stream:
-                    stream.write(_encode({"port": self.address[1], "token": self._token}))
+                    stream.write(_encode(endpoint))
                     stream.flush()
                     os.fsync(stream.fileno())
                 # Only the lock holder may replace a stale endpoint. Replacing a
                 # symlink removes the link itself; no target is opened or written.
                 os.replace(temporary, self.endpoint_path)
-                self._thread = threading.Thread(target=self._serve,
-                                                name="scope-ipc", daemon=True)
-                self._thread.start()
+                if self._listener is not None:
+                    self._thread = threading.Thread(target=self._serve,
+                                                    name="scope-ipc", daemon=True)
+                    self._thread.start()
+                if self._mailbox is not None:
+                    self._mailbox.start()
                 return self
             except BaseException:
                 try:
@@ -355,57 +424,71 @@ class Server:
                 slot: threading.BoundedSemaphore, control_only: bool) -> None:
         try:
             message = _receive(client, context.deadline, context.cancelled)
-            token, nonce = message.pop("token", None), message.pop("nonce", None)
-            if (not isinstance(token, str) or not _TOKEN.fullmatch(token)
-                    or not hmac.compare_digest(token, self._token)
-                    or not isinstance(nonce, str) or not _NONCE.fullmatch(nonce)
-                    or not context.active()):
-                return
-            context.nonce = nonce
-            if control_only:
-                if message.get("kind") not in self.control_kinds:
-                    return
-                # The shorter deadline bounds frame readers, not authenticated
-                # cancellation work. No control reader ever waits for human UI.
-                context.deadline = context.started_at + self.request_timeout
-            if self.admission is not None:
-                context.state = self.admission(message, context)
-            if not context.active():
-                return
-            reply = self.handler(message, context)
-            lock = context.reply_lock if context.reply_lock is not None else nullcontext()
-            with lock:
-                try:
-                    if (not context.active() or (context.reply_valid is not None
-                                                and not context.reply_valid())):
-                        return
-                    if not isinstance(reply, dict) or {"token", "nonce"} & reply.keys():
-                        return
-                    frame = _encode({**reply, "token": self._token, "nonce": nonce})
-                    if context.before_reply is not None and not context.before_reply():
-                        return
-                    if not context.active():
-                        return
-                    client.settimeout(min(0.5, max(0.001, context.deadline - time.monotonic())))
-                    client.sendall(frame)
-                    context.delivered = True
-                finally:
-                    if context.reply_finalize is not None:
-                        context.reply_finalize(context.delivered)
+
+            def send(frame):
+                client.settimeout(min(0.5, max(0.001, context.deadline - time.monotonic())))
+                client.sendall(frame)
+
+            self._dispatch(message, context, control_only, send)
         except Exception:
             # Authentication material and untrusted bodies must never be logged.
             pass
         finally:
             context.cancelled.set()
             client.close()
-            with self._mutex:
-                self._contexts.discard(context)
-            slot.release()
-            if context.after_reply is not None:
-                try:
-                    context.after_reply()
-                except Exception:
-                    pass
+            self._finish_context(context, slot)
+
+    def _dispatch(self, message, context, control_only, send):
+        """One authentication/admission/reply path shared by both transports."""
+        token, nonce = message.pop("token", None), message.pop("nonce", None)
+        if (not isinstance(token, str) or not _TOKEN.fullmatch(token)
+                or not hmac.compare_digest(token, self._token)
+                or not isinstance(nonce, str) or not _NONCE.fullmatch(nonce)
+                or not context.active()):
+            return
+        context.nonce = nonce
+        if control_only:
+            if message.get("kind") not in self.control_kinds:
+                return
+            context.deadline = context.started_at + self.request_timeout
+        with self._mutex:
+            # Keep lifetime tombstones, not a TTL/LRU that permits an old frame
+            # to become a fresh approval. Capacity exhaustion fails closed.
+            if nonce in self._seen_nonces or len(self._seen_nonces) >= MAX_SEEN_NONCES:
+                return
+            self._seen_nonces.add(nonce)
+        if self.admission is not None:
+            context.state = self.admission(message, context)
+        if not context.active():
+            return
+        reply = self.handler(message, context)
+        lock = context.reply_lock if context.reply_lock is not None else nullcontext()
+        with lock:
+            try:
+                if (not context.active() or (context.reply_valid is not None and not context.reply_valid())):
+                    return
+                if not isinstance(reply, dict) or {"token", "nonce"} & reply.keys():
+                    return
+                frame = _encode({**reply, "token": self._token, "nonce": nonce})
+                if context.before_reply is not None and not context.before_reply():
+                    return
+                if not context.active():
+                    return
+                send(frame)
+                context.delivered = True
+            finally:
+                if context.reply_finalize is not None:
+                    context.reply_finalize(context.delivered)
+
+    def _finish_context(self, context, slot):
+        with self._mutex:
+            self._contexts.discard(context)
+        slot.release()
+        if context.after_reply is not None:
+            try:
+                context.after_reply()
+            except Exception:
+                pass
 
     def close(self) -> None:
         with self._mutex:
@@ -436,6 +519,8 @@ class Server:
                         os.close(fd)
         if self._thread is not None and self._thread is not threading.current_thread():
             self._thread.join(timeout=0.5)
+        if self._mailbox is not None:
+            self._mailbox.close()
 
     def __enter__(self) -> Server:
         return self.start()

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import json
+import os
 import sys
 import threading
 import time
@@ -229,8 +230,18 @@ def ask(prompt: str, *, repo: str, context: str = "", home=None,
             from .ipc import exchange as transport
         else:
             transport = exchange
-        response = transport({"kind": "question", "repo": repo, "context": context,
-                              "prompt": prompt}, timeout=timeout, home=home)
+        message = {"kind": "question", "repo": repo, "context": context, "prompt": prompt}
+        launch_session = None
+        if "SCOPE_LAUNCH_ID" in os.environ or "SCOPE_HOST" in os.environ:
+            from . import host_session, learning, repository
+
+            launch_session = learning._launch_session(root=repository.find_root(repo))
+            if home is not None and host_session.read_launch(home) != host_session.current_launch():
+                raise ValueError("question targets another launch")
+            message["session_id"] = launch_session
+        response = transport(message, timeout=timeout, home=home)
+        if launch_session is not None:
+            learning._launch_session(launch_session, root=repository.find_root(repo))
         if time.monotonic() >= caller_deadline:
             return {"error": "understanding question timed out"}
         if cancelled is not None and cancelled.is_set():

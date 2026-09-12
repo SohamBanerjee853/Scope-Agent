@@ -189,9 +189,23 @@ def project(session_id, events, *, understanding=None):
         counts["hard_asks"] += int(action["tier"] == "T3")
     counts["scopes_granted"] = sum(isinstance(grant.get("request_id"), str)
                                   and grant["request_id"] not in failed_deliveries for grant in grants.values())
-    return {"schema_version": 1, "session_id": session_id, "status": last_status,
-            "counts": counts, "actions": actions, "understanding": _understanding(events, understanding),
-            "meaning": MEANING}
+    result = {"schema_version": 1, "session_id": session_id, "status": last_status,
+              "counts": counts, "actions": actions, "understanding": _understanding(events, understanding),
+              "meaning": MEANING}
+    launch_events = [event for event in events
+                     if event["event"] in {"host_connected", "client_ready", "review_unavailable",
+                                            "host_handoff_acknowledged", "agent_process", "session_end"}
+                     and isinstance(event["fields"].get("launch_id"), str)]
+    if launch_events:
+        from copy import deepcopy
+
+        result["launch"] = {
+            "events": deepcopy(launch_events),
+            "meaning": "Native startup, review readiness and observed requests are separate evidence. "
+                       "Launcher-inferred exit is not native SessionEnd. Receiver acknowledgments are caller reports; "
+                       "they prove no automatic upstream send, independent authorship, execution or completion.",
+        }
+    return result
 
 
 def build(session_id, *, home=None, understanding=None, audit=False, transcript_path=None, rules=(), host="codex"):
@@ -296,25 +310,47 @@ def render(result):
                                                 if isinstance(understanding, dict) else "absent in this legacy receipt"))
     lines.append("Evidence input: " + display_text(result.get("input", {}).get("status", "legacy/unknown")))
     lines.append("Native coverage: " + display_text(result.get("coverage", {}).get("meaning", "unknown")))
+    if isinstance(result.get("launch"), dict):
+        lines.append("Launch evidence: " + display_text(result["launch"].get("meaning", "unknown")))
     return "\n".join(lines)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="scope receipt", description=__doc__)
-    parser.add_argument("session_id", nargs="?", default=os.environ.get("CODEX_THREAD_ID"))
+    parser.add_argument("session_id", nargs="?")
     parser.add_argument("--home", type=Path)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--rebuild", action="store_true", help="rebuild even when only a legacy receipt is available")
     parser.add_argument("--audit", action="store_true", help="estimate current native policy using explicit inputs")
     parser.add_argument("--transcript", type=Path)
     parser.add_argument("--rules", type=Path, action="append", default=[])
-    parser.add_argument("--host", choices=("codex", "claude", "unknown"), default="codex")
+    parser.add_argument("--host", choices=("codex", "claude", "unknown"))
     args = parser.parse_args(argv)
-    if not args.session_id:
-        parser.error("session_id or CODEX_THREAD_ID is required")
     if (args.transcript or args.rules) and not args.audit:
         parser.error("--transcript/--rules require --audit")
     try:
+        run = None
+        if args.home is not None and (args.home / "launch.json").exists():
+            from . import host_session
+
+            run = host_session.read_launch(args.home)
+            if args.session_id is None:
+                args.session_id = host_session.status(home=args.home).get("session_id")
+        elif args.home is None and ("SCOPE_LAUNCH_ID" in os.environ or "SCOPE_HOST" in os.environ):
+            from . import host_session
+
+            run = host_session.current_launch()
+            args.session_id = host_session.require_session(args.session_id)
+        elif args.session_id is None and args.home is None:
+            args.session_id = os.environ.get("CODEX_THREAD_ID")
+        if not args.session_id:
+            parser.error("a session ID or registered native launch is required")
+        if run is not None:
+            if args.host is not None and args.host != run["host"]:
+                raise ValueError("receipt host conflicts with the recorded launch")
+            args.host = run["host"]
+        elif args.host is None:
+            args.host = "codex"
         legacy_path = receipt_path(args.session_id, home=args.home)
         if not args.rebuild and not args.audit and not _log_path(args.session_id, args.home).exists() and legacy_path.exists():
             result = load(legacy_path)

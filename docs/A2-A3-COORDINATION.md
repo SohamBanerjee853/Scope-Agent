@@ -31,9 +31,13 @@ knowledge uses current_status/source_status; historical results stay historical.
 
 Next-task selection/defer is a recorded outcome. The CLI explicitly reports
 delivery_status=not_attempted and creates no dispatch event. An instruction on
-stdout is not acknowledged host delivery. A future host adapter needs a real
-delivery acknowledgement before using `experience.dispatch`. Selection, delivery,
-execution, completion and permission remain distinct.
+stdout is not acknowledged host delivery. I1L adds an explicit receiving-caller
+operation: `scope next TASK --acknowledge HANDOFF --received-sha256 DIGEST`.
+It validates the same open native session, project and exact selected bytes before
+using `experience.dispatch`, and records a separate `host_handoff_acknowledged`
+event with `caller_reported` provenance. This is self-reported receipt, not an
+automatic upstream host send or independent caller-authorship proof. Selection,
+acknowledgment, execution, completion and permission remain distinct.
 
 ## Rehearsals and packaging
 
@@ -56,11 +60,13 @@ and A1 checkpoints, then runs the combined rehearsal for both shell dialects.
 Installed-resource and permission smoke checks remain in both native CI jobs.
 Validation is recorded in [the reconciliation checkpoint](RECONCILIATION-CHECKPOINT.md).
 
-## Remaining work
+## I1L continuation
 
+The user subsequently authorized I1L on the integration branch. It adds
 Codex/Claude two-pane launchers, native SessionStart registration, readiness,
-launch-owned watcher lifecycle, mailbox fallback and actual host delivery remain
-I1L work. They need the frozen startup contract and coordinated integration,
-followed by startup documentation and native/fake-host evidence. No global hooks,
-model session or sponsor account was installed for A3. Real human prediction/
-consent and live host acceptance remain manual checks.
+launch-owned watcher lifecycle, mailbox fallback and explicit receiver
+acknowledgment. Validation and platform limits belong in the startup checkpoint.
+No global hooks, model session or sponsor account was installed for A3/I1L.
+Real human prediction/consent, upstream hook trust and live-host acceptance remain
+manual checks. Native Windows manual-pane startup is not established by its
+shared Python/PowerShell contract tests.

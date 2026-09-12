@@ -13,6 +13,10 @@ Use the configured Scope executable. For a source checkout, `uv run scope` works
 from that checkout; from the debugging project use its absolute `.venv/bin/scope`
 path (Windows: `.venv/Scripts/scope.exe`). A global `scope` command is not assumed.
 Keep the debugging project's working directory or pass it explicitly with `-C`.
+Inside a Scope launch, run `scope ready` first. It must confirm the registered
+native session and reachable reviewer before dependent work. The launcher puts
+its installed Scope executable on the child's PATH. Never substitute a parent
+session ID or reuse a task owned by another session.
 
 Recover the relevant source, recent changes, and available observations before
 repeating a debugging attempt. Run `scope start` before edits to record the task
@@ -75,9 +79,21 @@ remain historical evidence when the supporting source changes. Use
 `scope next TASK_ID --smaller "Concrete next action" --larger "Optional larger action" -C PROJECT --json`
 to offer actions based on that evidence; `--larger` is optional. The watcher asks
 the person to choose `smaller`, `larger` when offered, or `defer`. The CLI records
-selection but reports host delivery as not attempted. Read the returned instruction
-and act within the user's existing task authorization; never manufacture a
-dispatch acknowledgement. Selection, delivery and completion are distinct, and
+selection but reports host delivery as not attempted. After this coding host has
+actually received and read a selected instruction inside its Scope launch, record
+that receiver acknowledgment using the returned handoff ID and exact
+`instruction_sha256`:
+
+```text
+scope next TASK_ID --acknowledge HANDOFF_ID --received-sha256 DIGEST -C PROJECT --json
+```
+
+This is an explicit caller report bound to the native session and selected bytes;
+it is not an automatic send to a host or independent proof of receipt. Do not
+acknowledge an instruction you have not received, deferred choices, or another
+session's work. Outside a Scope launch, selection remains available without this
+acknowledgment. Act within the user's existing task authorization. Selection,
+receiver acknowledgment and completion are distinct, and
 none creates a permission grant. Stop when the observed behavior and relevant
 regressions establish the requested fix.
 

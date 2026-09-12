@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from importlib.resources import files
 import json
 from pathlib import Path
 import stat
+import re
 import sys
 from typing import Callable
 
@@ -36,18 +38,74 @@ def run_check(argv: list[str]) -> dict:
 
 
 def run_next(argv: list[str]) -> dict:
-    """Save the human's selected next instruction without inventing delivery."""
+    """Select an instruction, or record its native caller's explicit receipt claim."""
     from . import experience, learning, ui
 
     parser = _parser("next")
     args = parser.parse_args(argv)
     task_id = _task(args, parser)
+    if args.acknowledge is not None:
+        if args.larger is not None or args.received_sha256 is None:
+            parser.error("--acknowledge requires --received-sha256 and cannot include --larger")
+        return _acknowledge(args, task_id)
+    if args.received_sha256 is not None:
+        parser.error("--received-sha256 requires --acknowledge")
     task = learning.read_task(args.cwd, task_id)
     result = experience.choose_next(args.cwd, task_id, smaller=args.smaller, larger=args.larger,
                                     ask=ui.answer_request, show=ui.show_request, provenance="human_ipc")
     return {**result, "task_id": task_id, "session_id": task["session_id"],
+            **({"instruction_sha256": _instruction_digest(result["instruction"])} if result["status"] == "selected" else {}),
             "delivery_status": "not_attempted",
             "delivery_reason": "This CLI saves selection only. Printing an instruction is not acknowledged agent delivery."}
+
+
+def _instruction_digest(instruction: str) -> str:
+    return hashlib.sha256(instruction.encode("utf-8")).hexdigest()
+
+
+def _acknowledge(args, task_id) -> dict:
+    """The caller explicitly claims receipt of exact bytes; no host inbox is inferred."""
+    from . import experience, host_session, learning, log
+
+    if not re.fullmatch(r"[0-9a-f]{64}", args.received_sha256):
+        raise ValueError("--received-sha256 must be exactly 64 lowercase hexadecimal characters")
+    launch = host_session.current_launch()
+    if launch is None:
+        raise ValueError("next-task acknowledgment requires a registered open native Scope launch")
+    session = host_session.require_session(host=launch["host"])
+    task = learning.read_task(args.cwd, task_id)
+    if task["session_id"] != session:
+        raise ValueError("task belongs to another native session")
+    selected = task["handoffs"].get(args.acknowledge)
+    if selected is None or selected["status"] != "selected":
+        raise ValueError("handoff is unavailable or acknowledgment was already attempted")
+    if _instruction_digest(selected["instruction"]) != args.received_sha256:
+        raise ValueError("received instruction digest differs from the selected handoff")
+    expected = {**selected, "status": "dispatching"}
+
+    def received(offered):
+        # The explicit receiver invocation plus its digest is the acknowledgment.
+        # Identity alone, printed output, and a merely selected task are not.
+        host_session.require_session(session, host=launch["host"])
+        if (offered != expected or type(offered) is not dict
+                or _instruction_digest(offered["instruction"]) != args.received_sha256):
+            return False
+        log.append(session, "host_handoff_acknowledged", task_id=task_id, session=session,
+                   handoff_id=offered["handoff_id"], host=launch["host"], launch_id=launch["launch_id"],
+                   instruction_sha256=args.received_sha256, provenance="caller_reported",
+                   source="scope_next_acknowledge",
+                   meaning="Explicit receiver claim; not proof of automatic delivery, execution or completion.")
+        return True
+
+    result = experience.dispatch(args.cwd, task_id, args.acknowledge, deliver=received)
+    acknowledged = result["status"] == "dispatched"
+    return {**result, "task_id": task_id, "session_id": session,
+            "instruction_sha256": args.received_sha256,
+            "delivery_status": "caller_acknowledged" if acknowledged else "not_acknowledged",
+            "delivery_provenance": "caller_reported",
+            "delivery_reason": ("The registered native caller explicitly reports receipt of this exact instruction. "
+                                "This self-reported acknowledgment does not prove automatic delivery, execution or completion."
+                                if acknowledged else "The native caller acknowledgment was not recorded; do not automatically retry.")}
 
 
 def skill_text() -> str:
@@ -138,7 +196,7 @@ def _parser(command: str) -> argparse.ArgumentParser:
             "checkpoint": "Capture bounded source changes for this task.",
             "knowledge": "Inspect saved observations against current source evidence.",
             "check": "Save a human prediction, separately request consent, then run one caller-side probe. Requires scope watch.",
-            "next": "Ask the human to select an agent-supplied instruction or defer. Saves selection without claiming delivery.",
+            "next": "Ask for a next-task choice, or explicitly acknowledge receipt of its exact instruction from the current native host.",
         }[command]
         parser.add_argument("task_id", nargs="?")
         parser.add_argument("--task", dest="task_option", help="task ID (alternative to the positional argument)")
@@ -148,8 +206,11 @@ def _parser(command: str) -> argparse.ArgumentParser:
             parser.add_argument("--spec", required=True, type=Path,
                                 help="UTF-8 JSON file: question, citations, field, argv; optional shell and timeout. File is read relative to the calling directory.")
         elif command == "next":
-            parser.add_argument("--smaller", required=True, help="complete smaller next-task instruction")
+            operation = parser.add_mutually_exclusive_group(required=True)
+            operation.add_argument("--smaller", help="complete smaller next-task instruction")
+            operation.add_argument("--acknowledge", metavar="HANDOFF", help="current native caller reports receipt of an already selected instruction")
             parser.add_argument("--larger", help="optional complete larger next-task instruction")
+            parser.add_argument("--received-sha256", metavar="DIGEST", help="exact instruction's SHA-256; required with --acknowledge")
     elif command == "revoke":
         parser.description = "Clear watcher grants and pending answers; retain saved debugging evidence."
         parser.add_argument("--session")
@@ -196,10 +257,12 @@ def _display(command, result):
         print("Session " + display_text(result["session_id"]) + "; inspect scope knowledge --json for saved evidence.")
         print("A completed check is a recorded comparison, not proof of repair, understanding or permission.")
     elif command == "next":
-        print("Next task: " + display_text(result["status"]))
+        status = "caller_acknowledged" if result["delivery_status"] == "caller_acknowledged" else result["status"]
+        print("Next task: " + display_text(status))
         if result["status"] == "selected":
             print("Saved " + display_text(result["choice"]) + " choice " + display_text(result["handoff_id"]))
             print("Instruction (untrusted): " + display_text(result["instruction"]))
+            print("Instruction SHA-256: " + result["instruction_sha256"])
         else:
             print(display_text(result["reason"]))
         print(display_text(result["delivery_reason"]))
@@ -260,6 +323,8 @@ def main(argv: list[str] | None = None) -> int:
         if command == "check":
             return 0 if (result["phase"] == "completed" and
                          result["observation"]["status"] in {"matched", "mismatched"}) else 1
+        if command == "next" and result["delivery_status"] == "not_acknowledged":
+            return 1
         return 0 if command != "revoke" or result["revoked"] is True and result["recorded"] else 1
     except Exception as error:
         print("scope " + command + ": " + display_text(str(error)), file=sys.stderr)

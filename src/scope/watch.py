@@ -1,6 +1,8 @@
 """Human decision watcher. No request handler executes commands or probes."""
 
 import argparse
+import os
+from pathlib import Path
 import threading
 import time
 import uuid
@@ -30,10 +32,12 @@ class _ReviewContext:
         self.transport = transport
         self.generation = generation
         self.deadline = min(transport.deadline, time.monotonic() + owner.human_timeout)
+        self.session_id = None
 
     def active(self):
         return (time.monotonic() < self.deadline and not self.owner.closed.is_set()
-                and self.owner.store.generation == self.generation and self.transport.active())
+                and self.owner.store.generation == self.generation and self.transport.active()
+                and self.owner._native_active(self.session_id))
 
 
 class Watcher:
@@ -45,10 +49,51 @@ class Watcher:
         self.human_timeout = human_timeout
         self.ui_lock = threading.Lock()
         self.closed = threading.Event()
+        self._close_lock = threading.RLock()
+        self._close_complete = False
         self._sessions = set()
+        self.launch = None
+        options = {}
+        if "SCOPE_LAUNCH_ID" in os.environ or "SCOPE_HOST" in os.environ:
+            from . import host_session
+
+            self.launch = host_session.current_launch()
+            if self.launch is None:
+                raise ValueError("native launch identity unavailable")
+            options["launch_id"] = self.launch["launch_id"]
         self.server = Server(self.handle, admission=self._admit,
                              request_timeout=human_timeout, max_clients=max_clients,
-                             control_kinds=frozenset({"revoke", "shutdown"}))
+                             control_kinds=frozenset({"revoke", "shutdown"}), **options)
+
+    def _native_active(self, session):
+        if self.launch is None or session is None:
+            return True
+        from . import host_session
+
+        try:
+            return (host_session.current_launch() == self.launch
+                    and host_session.require_session(session) == session)
+        except Exception:
+            return False
+
+    def _bind(self, context, session, *, cwd=None, understanding=False):
+        if self.launch is None:
+            return
+        from . import host_session, repository
+
+        if not self.launch["understanding" if understanding else "permissions"]:
+            raise ValueError("workflow disabled in this launch")
+        if session is None:
+            raise ValueError("launched request requires a native session")
+        if understanding:
+            if repository.find_root(cwd) != repository.find_root(self.launch["cwd"]):
+                raise ValueError("question belongs to another project")
+            host_session.require_session(session)
+        else:
+            host_session.require_session(session, cwd=cwd)
+        context.session_id = session
+        previous = context.transport.reply_valid
+        context.transport.reply_valid = lambda: previous() and self._native_active(session)
 
     def _admit(self, message, context):
         with self.store.lock:
@@ -63,12 +108,16 @@ class Watcher:
         return self
 
     def close(self):
-        if self.closed.is_set():
-            return
-        self.closed.set()
-        with self.store.lock:
-            self.store.revoke()
-        self.server.close()
+        # The main loop may observe closed while a daemon reply thread is still
+        # removing the endpoint. Wait for that cleanup before the process exits.
+        with self._close_lock:
+            if self._close_complete:
+                return
+            self.closed.set()
+            with self.store.lock:
+                self.store.revoke()
+            self.server.close()
+            self._close_complete = True
 
     def __enter__(self):
         return self.start()
@@ -120,7 +169,7 @@ class Watcher:
                 "ping": ({"kind"}, set()),
                 "proposal": ({"kind", "session_id", "cwd", "card"}, {"agent_id"}),
                 "request": ({"kind", "request"}, {"request_id"}),
-                "question": ({"kind", "repo", "context", "prompt"}, set()),
+                "question": ({"kind", "repo", "context", "prompt"}, {"session_id"}),
                 "notice": ({"kind", "message"}, set()),
                 "revoke": ({"kind"}, set()),
                 "stop": ({"kind"}, {"session_id"}),
@@ -147,6 +196,7 @@ class Watcher:
                 session = _text(message["session_id"], limit=512)
                 agent = _text(message.get("agent_id"), optional=True, limit=512)
                 cwd = _text(message["cwd"], limit=4096)
+                self._bind(review_context, session, cwd=cwd)
                 card = validate_card(message["card"])
                 with self.store.lock:
                     if not review_context.active():
@@ -159,6 +209,8 @@ class Watcher:
                 return self._request(message, review_context)
             if kind == "question":
                 repo = _text(message["repo"], limit=4096)
+                session = _text(message.get("session_id"), optional=True, limit=512)
+                self._bind(review_context, session, cwd=repo, understanding=True)
                 context_text = message["context"]
                 if not isinstance(context_text, str) or len(context_text) > 16384:
                     raise ValueError("invalid question context")
@@ -182,6 +234,10 @@ class Watcher:
                 return {"received": False}
             if kind == "stop":
                 session = _text(message.get("session_id"), optional=True, limit=512)
+                if self.launch is not None:
+                    from . import host_session
+
+                    host_session.require_session(session)
                 if session:
                     with self.store.lock:
                         self._record(session, "watcher_stop_notice")
@@ -192,6 +248,7 @@ class Watcher:
 
     def _request(self, message, context):
         request = parse_request(json.dumps(message["request"], allow_nan=False))
+        self._bind(context, request.session_id, cwd=request.cwd)
         request_id = _text(message.get("request_id", str(uuid.uuid4())), limit=512)
         tier = classify(request.command, request.cwd, request.shell, request.description)
         if not _valid_tier(tier, Tier, SegmentFinding):
@@ -277,16 +334,42 @@ class Watcher:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="scope watch", description=__doc__)
-    parser.parse_args(argv)
+    parser.add_argument("--owner-home", type=Path, help="private run whose owner lifetime controls this watcher")
+    args = parser.parse_args(argv)
     ui = TerminalUI()
-    watcher = Watcher(ui)
+    watcher = None
+    owner_home = None
     try:
+        if args.owner_home is not None:
+            from . import host_session, launch
+
+            config = host_session.read_launch(args.owner_home)
+            owner_home = Path(config["home"])
+            os.environ.update(SCOPE_HOME=str(owner_home), SCOPE_LAUNCH_ID=config["launch_id"],
+                              SCOPE_HOST=config["host"], SCOPE_POPUP="0")
+            os.environ.pop("CODEX_THREAD_ID", None)
+        watcher = Watcher(ui)
         watcher.start()
-        ui.notice("Scope review is listening on local authenticated TCP. Ctrl-C revokes scopes and stops this watcher.")
+        transport = "local authenticated TCP and run mailbox" if watcher.launch else "local authenticated TCP"
+        ui.notice(f"Scope review is listening on {transport}. Ctrl-C revokes scopes and stops this watcher.")
         if not ui.interactive:
             ui.notice("No interactive terminal: human decisions will abstain and questions will return unavailable.")
+        started = time.monotonic()
         while not watcher.closed.wait(0.1):
-            pass
+            if owner_home is not None:
+                if launch.owner_alive(owner_home):
+                    continue
+                if launch.owner_started(owner_home) or time.monotonic() - started >= 30:
+                    ui.notice("The launch owner has ended or did not become available; revoking this run's scopes.")
+                    watcher.close()
+                    (owner_home / "environment.json").unlink(missing_ok=True)
+                    host_session.close_session(inferred=True, home=owner_home)
+                    state = host_session.status(home=owner_home)
+                    if state.get("session_id"):
+                        from . import receipt
+
+                        receipt.write(state["session_id"], home=owner_home, host=state["host"])
+                    break
         return 0
     except KeyboardInterrupt:
         return 0
@@ -294,4 +377,5 @@ def main(argv=None):
         ui.notice("Scope watcher could not start or continue. Check for another watcher and private SCOPE_HOME permissions.")
         return 1
     finally:
-        watcher.close()
+        if watcher is not None:
+            watcher.close()

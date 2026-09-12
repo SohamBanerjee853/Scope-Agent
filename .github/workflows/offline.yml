@@ -68,6 +68,16 @@ jobs:
       - name: Verify installed payment fixture and combined A2/A3 rehearsal
         run: uv run --no-sync python -I scripts/check-demo.py
 
+      - name: Provide tmux for the fake-host terminal rehearsal
+        if: runner.os == 'macOS'
+        run: |
+          command -v tmux >/dev/null || brew install tmux
+          tmux -V
+
+      - name: Exercise both fake hosts inside and outside tmux
+        if: runner.os == 'macOS'
+        run: uv run --no-sync python -I scripts/check-launcher.py
+
       - name: Check the POSIX smoke wrapper
         if: runner.os == 'macOS'
         run: sh scripts/smoke.sh --dry-run
@@ -77,4 +87,5 @@ jobs:
         run: ./scripts/smoke.ps1 --dry-run
 
       # These jobs do not install or start Codex/Claude, use credentials for model
-      # work, or establish native hook trust. Host launchers are a later milestone.
+      # work, or establish native hook trust. Native Windows manual-pane startup
+      # and real-human acceptance remain separate from shared contract tests.

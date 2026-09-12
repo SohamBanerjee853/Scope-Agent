@@ -14,7 +14,8 @@ prediction/consent/observation and next-task engine at 23d96d1 in learning.py an
 experience.py. Use its actual docs/A2-API.md contract; preserve his implementation
 and review origin/arjun_branch for further changes. A3 uses that engine through
 authenticated watcher callbacks. CLI next-task selection does not claim delivery
-to a coding host. Planned host launchers and acknowledged delivery remain I1L.
+to a coding host. Soham is implementing I1L on integration/scope: host launchers, native identity,
+owned watcher lifecycle and mailbox fallback, with explicit receiver acknowledgment.
 Preserve both feature histories and branches. No force
 push, history rewrite or destructive reset. Work in integration/scope for shared
 reconciliation, test it, then merge normally into main when the requested scope
@@ -37,7 +38,7 @@ is ready. No global hooks, authenticated live/model sessions or sponsor spending
    native decisions, completion, timings or mastery. Label all fixtures.
 10. Preserve host sandbox, approval policy, network limits and hook trust.
     Configuration/startup does not prove a permission request was intercepted.
-11. Use actual native session IDs when launch integration is implemented. Never
+11. Use actual native session IDs in launch integration. Never
     borrow the launching agent's ID; demos always create fresh synthetic IDs.
 
 ## Ownership and validation
@@ -47,7 +48,8 @@ understanding_summary.py, A2 tests and docs/UNDERSTANDING-EVENTS.md.
 Soham: permission modules/tests/assets and docs/SOHAM-CHECKPOINT.md; A3
 learning_cli.py, ui.py, demo.py, demo_agent.py, understanding skill/demo assets
 and their tests. Shared foundation/docs/CI are integration-owned during this
-explicit reconciliation. Planned host launchers remain a later coordinated task.
+explicit reconciliation. I1L launcher, host identity/adapter, mailbox and shared
+integration changes are integration-owned during reconciliation.
 Module paths are under src/scope unless stated otherwise.
 
 Use apply_patch for edits. Run uv run pytest -q before every commit; a failure

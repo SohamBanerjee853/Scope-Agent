@@ -8,8 +8,8 @@ still fall back to the host's native approval flow.
 The debugging workflow captures source context, asks for a concrete prediction,
 separately requests consent to run a bounded probe, and compares the actual result
 against that source version. It saves the evidence and lets the person choose a
-next debugging action. The `scope codex` and `scope claude` two-pane launchers are
-planned and remain unavailable.
+next debugging action. Start `scope codex` or `scope claude` to place your coding
+agent on the left and Scope's human review on the right in the same terminal.
 
 Permission is not proof of execution. Predictions are not consent or mastery.
 Scope supplements the host's sandbox and approval controls. It uses your existing
@@ -48,14 +48,78 @@ $scopeExe = (Resolve-Path .\.venv\Scripts\scope.exe).Path
 ```
 
 Use that absolute executable in the other project, or stay here and pass `-C PATH`
-to task/demo commands. Each newly opened terminal needs its own path variable.
+to launch/task/demo commands. Each newly opened terminal needs its own path variable.
 
 Smoke uses a real local watcher and Scope hook processes with explicitly scripted
 fixture choices. Requested command strings never execute. It demonstrates two
 allows, revocation with budget remaining and a synthetic T3 hard ask, using fresh
 session IDs and temporary homes. It does not launch a coding host or model.
 
-## Optional manual permission setup
+## Start a coding session
+
+Install the coding host you intend to use and sign in through its normal setup.
+Automatic panes require tmux on macOS, Linux or WSL (`brew install tmux` on a Mac).
+From the original Scope checkout, preview a launch without creating files or
+starting a host:
+
+```text
+uv run scope codex -C ../your-project --dry-run
+uv run scope claude -C ../your-project --dry-run
+```
+
+Then, in an interactive terminal, use your installed executable:
+
+```sh
+"$scope_exe" codex -C ../your-project "Investigate the failing retry test"
+# Or use your Claude Code installation:
+"$scope_exe" claude -C ../your-project
+```
+
+Both workflows load by default. `--permissions-only` works without a Git project;
+`--understanding-only` omits Scope's permission hooks. `-m MODEL` selects the host's
+model. Settings and guidance apply to this invocation; no global hook or skill
+installation is required. Existing visible Scope hooks cause a migration error
+so they can be reviewed without being overwritten. Unrelated host settings and
+hooks remain in effect. Both hosts combine hook sources; see their
+[Codex hook rules](https://learn.chatgpt.com/docs/hooks) and
+[Claude settings rules](https://code.claude.com/docs/en/settings).
+
+On first use with Codex, open `/hooks`, inspect and trust the exact definitions,
+then restart if required. Scope does not bypass that trust. Codex's native startup
+hook occurs when the first task starts. The host receives guidance to run
+`scope ready` before dependent work. It separately reports registered startup,
+reachable human review, and permission status: disabled, configured/waiting, or
+requests observed. An open pane or a configured hook proves no interception.
+
+Use Ctrl-b then an arrow to switch panes. Ctrl-b then d detaches without ending
+the launch; use the printed reattach command. When launched inside tmux, Scope
+creates its own window and preserves existing windows. Normal host exit closes
+the owned review pane and prints the session's receipt replay command. A crashed
+owner releases its OS lifetime lock; review then revokes pending decisions and
+records the inferred exit separately from any native SessionEnd.
+
+Native Windows uses two manually opened terminals:
+
+```powershell
+& $scopeExe claude -C ..\your-project --manual-watch
+```
+
+Run the printed `watch --owner-home` command in the second terminal promptly;
+the host waits up to 30 seconds for review. The same manual option works for
+Codex or on other platforms. Native Windows pane startup and live human/host
+acceptance remain unverified; Windows CI checks shared Python and PowerShell
+contracts. WSL supports automatic tmux panes.
+
+Each launch owns a private directory under `SCOPE_HOME/runs/`. Task IDs, proposals
+and questions use the registered native host session, with parent and foreign
+session IDs rejected. If TCP connection establishment is blocked, only that
+launch may use its authenticated file mailbox. A request already sent over TCP
+is never retried. Neither transport executes commands for the caller.
+
+## Legacy manual permission setup
+
+Use this setup for the original manual watch workflow. The launchers above supply
+their own hooks; existing Scope installs need review before using a launcher.
 
 Preview before installing:
 
@@ -153,8 +217,19 @@ Checks return the saved task/session identity and the actual engine record.
 `matched` and `mismatched` both represent an observed comparison; neither proves
 the whole repair. Skipped, interrupted and `not_verified` checks exit nonzero.
 The next command saves the selected instruction or deferral; it explicitly
-reports delivery as not attempted. It does not claim that printing an instruction
-delivered it to a host, executed it, or granted permission. Shared revoke cancels
+reports delivery as not attempted. Inside a Scope launch, a coding host that has
+actually received the instruction can explicitly acknowledge its exact bytes:
+
+```text
+scope next TASK_ID --acknowledge HANDOFF_ID --received-sha256 DIGEST -C PROJECT --json
+```
+
+Use the returned `handoff_id` and `instruction_sha256`. This records a
+`caller_acknowledged` result for the same open native session; it is a receiver's
+self-report, not an automatic host send or independent authorship proof. A
+wrong digest, foreign session or previously attempted dispatch is refused.
+Printing or acknowledging an instruction proves no execution or permission.
+Shared revoke cancels
 pending answers and grants; it does not kill a probe that already started.
 
 Run the complete automated rehearsal without selecting a user directory:
@@ -213,10 +288,19 @@ the exact stable-key repair, and checks actual regression outcomes. It exercises
 A1 task checkpoints, then the combined A2/A3 rehearsal for both shell dialects.
 Its consent, predictions and inbox delivery are explicitly fixtures; it calls no
 model or coding host. Both checks run in macOS/Windows CI.
+On macOS/Linux/WSL with tmux installed, run
+`uv run --no-sync python -I scripts/check-launcher.py` for all four fake-host
+terminal flows: Codex/Claude inside/outside tmux. This uses real terminals and
+installed adapters with labeled fixture answers. It checks pane cleanup, native
+identity registration by the fake host, permission reuse, an understanding probe
+and a correlated receipt; it does not verify upstream hook trust or human answers.
+The macOS CI job also runs this harness. Windows runs the shared launcher tests
+without claiming native pane startup.
 `uv sync --locked` restores editable development.
 
 If make is available, `make setup`, `make test`, `make build`, `make smoke` and
-`make check-installed` wrap these commands. Smoke selects the PowerShell wrapper
+`make check-installed` wrap these commands; `make check-launchers` runs the tmux
+fixture harness where supported. Smoke selects the PowerShell wrapper
 on Windows and the POSIX wrapper elsewhere. Make is optional on both platforms.
 
 Resources under src/scope ship in wheels; smoke wrappers ship in the source
@@ -225,7 +309,8 @@ SCOPE_HOME defaults to ~/.scope, CODEX_HOME to ~/.codex. Test homes are temporar
 Native Windows hooks, live host trust and real human debugging are separate from
 offline parser/transport verification.
 
-Read [the interfaces](docs/INTERFACES.md), [Soham's checkpoint](docs/SOHAM-CHECKPOINT.md),
+Read [the startup checkpoint](docs/STARTUP-CHECKPOINT.md),
+[the interfaces](docs/INTERFACES.md), [Soham's checkpoint](docs/SOHAM-CHECKPOINT.md),
 [Arjun's checkpoint](docs/ARJUN-CHECKPOINT.md), and
 [the understanding purpose](docs/UNDERSTANDING-PURPOSE.md). Historical foundation
 checkpoints describe their original commits, not the current feature set.

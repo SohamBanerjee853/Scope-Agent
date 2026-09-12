@@ -16,3 +16,5 @@ def pytest_make_parametrize_id(config, val, argname):
 def isolated_homes(tmp_path, monkeypatch):
     for name in ("SCOPE_HOME", "CODEX_HOME", "CLAUDE_CONFIG_DIR"):
         monkeypatch.setenv(name, str(tmp_path / name.lower()))
+    for name in ("SCOPE_LAUNCH_ID", "SCOPE_HOST", "CODEX_THREAD_ID"):
+        monkeypatch.delenv(name, raising=False)

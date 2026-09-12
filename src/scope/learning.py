@@ -18,15 +18,33 @@ _MAX_TEXT = 128 * 1024
 
 
 def resolve_session(session_id: str | None = None, *, task_id: str | None = None) -> str:
-    """One integration seam for future native host-session registration."""
-    if os.environ.get("SCOPE_LAUNCH_ID"):
-        raise storage.StateError("native launch identity is not implemented until I1L")
+    """Use registered native identity inside a launch, legacy identity outside."""
+    if "SCOPE_LAUNCH_ID" in os.environ or "SCOPE_HOST" in os.environ:
+        return _launch_session(session_id, require_understanding=False)
     value = session_id if session_id is not None else os.environ.get("CODEX_THREAD_ID")
     if value is None:
         value = task_id or f"task-{uuid.uuid4()}"
     if not isinstance(value, str) or not value.strip() or len(value) > 512:
         raise ValueError("session must be a nonempty string of at most 512 characters")
     return value
+
+
+def _launch_session(expected=None, *, root=None, require_understanding=True):
+    """Guard every task read/mutation, including existing A2 task IDs."""
+    if "SCOPE_LAUNCH_ID" not in os.environ and "SCOPE_HOST" not in os.environ:
+        return None
+    from . import host_session
+
+    try:
+        launch = host_session.current_launch()
+        if launch is None or (require_understanding and not launch["understanding"]):
+            raise ValueError("understanding is unavailable in this launch")
+        session = host_session.require_session(expected)
+        if root is not None and repository.find_root(launch["cwd"]) != root:
+            raise ValueError("task belongs to another launch project")
+        return session
+    except Exception as error:
+        raise storage.StateError("native launch identity unavailable: " + str(error)) from error
 
 
 def _manifest(source: dict) -> dict:
@@ -347,6 +365,7 @@ def read_task(path: str | Path, task_id: str) -> dict:
     task = state["tasks"].get(task_id)
     if task is None:
         raise storage.StateError("task is unavailable; start a task first")
+    _launch_session(task["session_id"], root=root)
     return deepcopy(task)
 
 
@@ -367,10 +386,12 @@ def update_task(path: str | Path, task_id: str, change) -> dict:
         task = state["tasks"].get(task_id)
         if task is None:
             raise storage.StateError("task is unavailable; start a task first")
+        _launch_session(task["session_id"], root=root)
         identity = deepcopy({key: task[key] for key in ("task_id", "session_id", "baseline", "started_at")})
         change(task)
         if any(task.get(key) != value for key, value in identity.items()):
             raise storage.StateError("task identity or baseline changed; original preserved")
+        _launch_session(task["session_id"], root=root)
         return _validate_state(state, root)
 
     state = storage.update(root, apply)
@@ -380,6 +401,8 @@ def update_task(path: str | Path, task_id: str, change) -> dict:
 def start(path: str | Path, description: str, *, session_id: str | None = None) -> dict:
     if not isinstance(description, str) or not description.strip() or len(description) > 2000:
         raise ValueError("task description must contain 1–2000 characters")
+    if "SCOPE_LAUNCH_ID" in os.environ or "SCOPE_HOST" in os.environ:
+        _launch_session(session_id, root=repository.find_root(path))
     source = repository.snapshot(path)
     root = Path(source["root"])
     task_id = f"task-{uuid.uuid4()}"
@@ -389,6 +412,7 @@ def start(path: str | Path, description: str, *, session_id: str | None = None) 
             "source": source, "checkpoints": [], "observations": [], "checks": {}, "handoffs": {}}
 
     def change(state):
+        _launch_session(session, root=root)
         state = _validate_state(state, root)
         state["tasks"][task_id] = task
         return state
@@ -413,12 +437,14 @@ def checkpoint(path: str | Path, task_id: str, *, note: str = "") -> dict:
         task = state["tasks"].get(task_id)
         if task is None:
             raise storage.StateError("task is unavailable; start a task first")
+        _launch_session(task["session_id"], root=root)
         source = repository.snapshot(root)
         entry = {"checkpoint_id": f"checkpoint-{uuid.uuid4()}", "task_id": task_id,
                  "timestamp": source["timestamp"], "note": note,
                  "changes": repository.changes(task["source"], source), "source": _manifest(source)}
         task["source"] = source
         task["checkpoints"] = [*task["checkpoints"], entry][-5:]
+        _launch_session(task["session_id"], root=root)
         captured.update({"entry": entry, "session_id": task["session_id"]})
         return state
 

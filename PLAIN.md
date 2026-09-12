@@ -12,7 +12,9 @@ relevant source, explain a hypothesis, ask the person to predict a concrete resu
 request separate consent for a probe, inspect the real output and choose the next
 small repair. `scope check` connects the saved task to the prediction, consent and
 probe engine through the review terminal. `scope next` saves the person's chosen
-action or deferral; it does not claim automatic delivery to a coding host.
+action or deferral. Inside a launch, the receiving coding host can explicitly
+acknowledge the exact selected instruction. That is a recorded receiver report,
+separate from automatic delivery, execution or completion.
 
 A saved prediction is not execution permission. An allow is not proof that a
 command ran. A selected next task is not a completed repair, and a correct answer
@@ -31,6 +33,13 @@ Optional Exa guidance lets the current host explain a public command concept wit
 a source link; an explanation never changes Scope's permission decision.
 
 Scope uses the person's current coding agent, without another model API key. It
-preserves the host's sandbox, approval settings and normal hook trust. The planned
-Codex/Claude launchers with agent and review panes are not implemented yet.
+preserves the host's sandbox, approval settings and normal hook trust.
+`scope codex` and `scope claude` open the agent and review panes in one terminal
+using tmux. A manual two-terminal option supports environments without tmux.
+Each launch keeps its own records and uses the host's actual startup identity.
+Readiness distinguishes a connected host, reachable review and observed requests.
+The review process ends with its owner and revokes pending decisions. An
+authenticated local file mailbox handles blocked TCP connections without retrying
+requests already sent. Native host trust and real-human acceptance still need
+separate verification; scripted terminal checks use fake hosts and labeled answers.
 See [README.md](README.md) and owner checkpoints for current commands and limits.

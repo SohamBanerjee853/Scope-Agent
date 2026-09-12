@@ -135,7 +135,7 @@ The following describes logical bodies before transport token/nonce fields:
 | ping | none | ready boolean |
 | proposal | session_id, optional agent_id, cwd, card | accepted boolean |
 | request | request: original PermissionRequest object; optional internal request_id | behavior: allow, deny or null (abstain); optional message |
-| question | repo, context and prompt strings | answer string, or error |
+| question | repo, context and prompt strings; launched callers also supply native session_id | answer string, or error |
 | notice | message string | received boolean |
 | revoke | none; clears all watcher grants/proposals and pending answers | revoked boolean |
 | stop | optional session_id | received boolean |
@@ -161,6 +161,21 @@ answer approve a later request. A noninteractive watcher refuses human decisions
 
 The watcher MUST NOT execute commands received through this channel. Arjun's probe
 runs in the calling process through the bounded runner after separate consent.
+
+I1L binds launched questions to the registered native session and task project.
+The watcher rejects missing/foreign identities inside a launch and rechecks native
+session lifetime before returning an answer. Legacy standalone questions retain
+their original body. Task reads and mutations also enforce this identity, so an
+existing task ID cannot bypass a launched caller's session boundary.
+
+Next-task selection returns the instruction's UTF-8 SHA-256 digest while retaining
+delivery_status=not_attempted. A receiving coding host may explicitly call
+`scope next TASK --acknowledge HANDOFF --received-sha256 DIGEST` after reading it.
+The adapter validates the selected handoff, digest and open native task identity,
+then uses A2's unchanged one-attempt dispatch contract. A supplemental
+host_handoff_acknowledged event records caller_reported provenance. This is a
+same-user receiver report; it proves neither independent caller authorship nor
+an automatic upstream host send, execution, permission or task completion.
 
 ### Logs, sessions and receipt projection
 
@@ -188,6 +203,9 @@ Keep schema_version 1 and the permission actions/counts structure. Add a separat
 understanding object. Permission counts include requests, auto_allowed,
 allowed_once, denied, hard_asks and scopes_granted. Older schema-1 receipts lacking
 understanding remain readable. Rebuilding from events can add it.
+Launched receipts may also include a separate launch evidence section containing
+native startup, readiness, receiver acknowledgment and native/inferred exit events.
+Its caller-report and coverage limits do not alter permission or A2 counts.
 
 Launched task/proposal sessions use the registered host ID through the shared
 resolver. Outside a launch, use an explicit session or CODEX_THREAD_ID when
