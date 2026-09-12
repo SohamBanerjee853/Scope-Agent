@@ -86,8 +86,9 @@ def _path_reason(name: str) -> str | None:
             or base in {"id_rsa", "id_ed25519", ".npmrc", ".pypirc", ".netrc"}
             or path.suffix.lower() in {".pem", ".key", ".p12", ".pfx", ".jks", ".kdbx"}):
         return "private_path"
-    if (base.endswith((".lock", "-lock.json", ".min.js", ".min.css", ".map", ".generated.py"))
-            or base in {"pnpm-lock.yaml", "poetry.lock", "cargo.lock", "go.sum", "local-notes.md", "local-plan.md"}):
+    if (base.endswith((".lock", "-lock.json", ".min.js", ".min.css", ".map", ".generated.py",
+                       "-prompt.md", "_prompt.md", "-prompts.md", "_prompts.md"))
+            or base in {"pnpm-lock.yaml", "poetry.lock", "cargo.lock", "go.sum"}):
         return "generated_or_local_noise"
     if path.suffix.lower() not in _TEXT_SUFFIXES and base not in _TEXT_NAMES:
         return "unsupported_source_type"

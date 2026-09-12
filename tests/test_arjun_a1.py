@@ -66,7 +66,7 @@ def test_invalid_citations(repo, citation):
 
 @pytest.mark.parametrize("name", [".env", ".env.example", "secret.json", "api-token.txt", "private/data.py",
                                    ".aws/config", "key.pem", "node_modules/index.js", ".venv/lib.py",
-                                   "uv.lock", "package-lock.json", "app.min.js", "out.generated.py", "LOCAL-NOTES.md"])
+                                   "uv.lock", "package-lock.json", "app.min.js", "out.generated.py", "local-prompts.md"])
 def test_private_and_generated_paths_are_excluded_even_if_tracked(repo, name):
     file = repo / name
     file.parent.mkdir(parents=True, exist_ok=True)
@@ -78,11 +78,12 @@ def test_private_and_generated_paths_are_excluded_even_if_tracked(repo, name):
     assert "DO_NOT_CAPTURE" not in json.dumps(source)
 
 
-def test_gitignored_tracked_and_untracked(repo):
+@pytest.mark.parametrize("ignore_file", [".gitignore", ".git/info/exclude"])
+def test_gitignored_tracked_and_untracked(repo, ignore_file):
     (repo / "hidden.py").write_text("HIDDEN_MARKER", encoding="utf-8")
     git(repo, "add", "hidden.py")
     (repo / "other.py").write_text("OTHER_MARKER", encoding="utf-8")
-    (repo / ".gitignore").write_text("hidden.py\nother.py\n", encoding="utf-8")
+    (repo / ignore_file).write_text("hidden.py\nother.py\n", encoding="utf-8")
     source = repository.snapshot(repo)
     assert source["skipped"]["hidden.py"] == "gitignored"
     assert source["skipped"]["other.py"] == "gitignored"
