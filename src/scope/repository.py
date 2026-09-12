@@ -51,8 +51,13 @@ class RepositoryError(RuntimeError):
 
 
 def _git(directory: Path, *args):
+    # An agent launched by Git may inherit GIT_DIR/GIT_WORK_TREE or an alternate
+    # index/config. Bind inspection to the requested directory, without mutating
+    # the process environment used by unrelated caller-side commands.
+    environment = {key: value for key, value in os.environ.items()
+                   if not key.upper().startswith("GIT_")}
     return run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false",
-                "-C", str(directory), *args], cwd=directory)
+                "-C", str(directory), *args], cwd=directory, env=environment)
 
 
 def find_root(path: str | Path) -> Path:
@@ -66,9 +71,11 @@ def find_root(path: str | Path) -> Path:
 
 
 def _path_reason(name: str) -> str | None:
+    if not isinstance(name, str) or not name:
+        return "unsafe_path"
     path = PurePosixPath(name)
     windows = PureWindowsPath(name)
-    if (not name or path.is_absolute() or windows.is_absolute() or windows.drive
+    if (not path.parts or path.is_absolute() or windows.is_absolute() or windows.drive
             or ".." in path.parts or "\\" in name or any(ord(c) < 32 for c in name)):
         return "unsafe_path"
     parts = [part.lower() for part in path.parts]
@@ -150,6 +157,18 @@ def _symbols(text: str, name: str) -> list[dict]:
     return symbols
 
 
+def source_lines(text: str, *, keepends: bool = False) -> list[str]:
+    """Editor/Python source lines: only CRLF, CR and LF delimit lines.
+
+    str.splitlines also splits Unicode paragraph separators and form feeds,
+    which can make a citation point beyond the physical source file.
+    """
+    if keepends:
+        return [line for line in re.findall(r"[^\r\n]*(?:\r\n|\r|\n|$)", text) if line]
+    lines = re.split(r"\r\n|\r|\n", text)
+    return lines[:-1] if not lines[-1] else lines
+
+
 def _listing(result) -> tuple[list[str], bool]:
     if result.exit_code != 0 or result.timed_out or result.error or result.cleanup_incomplete:
         raise RepositoryError("Git source listing failed; no complete snapshot is available")
@@ -198,7 +217,7 @@ def snapshot(path: str | Path) -> dict:
             continue
         text = data.decode("utf-8")
         files[name] = {"sha256": hashlib.sha256(data).hexdigest(), "text": text,
-                       "bytes": len(data), "line_count": len(text.splitlines()),
+                       "bytes": len(data), "line_count": len(source_lines(text)),
                        "symbols": _symbols(text, name)}
         total += len(data)
     for name in sorted(set(ignored_untracked) - set(skipped)):
@@ -244,7 +263,14 @@ def evidence_status(references: list[dict], source: dict) -> dict:
               or not 1 <= reference["start_line"] <= reference["end_line"] <= file["line_count"]):
             status, reason = "unverified", "invalid source citation"
         else:
-            status, reason = "current", "supporting source hash and lines match"
+            try:
+                citation = validate_citation(source, reference.get("citation"))
+            except ValueError:
+                citation = None
+            if citation is None or any(citation[key] != reference[key] for key in ("path", "start_line", "end_line", "sha256")):
+                status, reason = "unverified", "citation text does not match its source reference"
+            else:
+                status, reason = "current", "supporting source hash and lines match"
         findings.append({"path": name, "status": status, "reason": reason})
     statuses = {finding["status"] for finding in findings}
     overall = "unverified" if "unverified" in statuses else "stale" if "stale" in statuses else "current"
@@ -264,8 +290,8 @@ def changes(before: dict, after: dict) -> dict:
         if old and old["sha256"] == new["sha256"]:
             continue
         result["modified" if old else "added"].append(name)
-        lines = difflib.unified_diff((old["text"] if old else "").splitlines(keepends=True),
-                                     new["text"].splitlines(keepends=True), fromfile=f"before/{name}", tofile=f"after/{name}")
+        lines = difflib.unified_diff(source_lines(old["text"] if old else "", keepends=True),
+                                     source_lines(new["text"], keepends=True), fromfile=f"before/{name}", tofile=f"after/{name}")
         for line in lines:
             data = line.encode("utf-8")
             remaining = MAX_DIFF_BYTES - len(diff)

@@ -1,7 +1,8 @@
 # Arjun checkpoint: A1 repository evidence and bounded runner
 
 September 12, 2026. Branch: `arjun_branch`. **A1 is implemented; A2–A4 and I1L
-are not implemented.** Arjun requested local commits only, so nothing was pushed.
+are not implemented.** The initial A1 checkpoint used local commits only; Arjun
+later authorized pushing `arjun_branch` after the debugging verification below.
 The remote is `https://github.com/SohamBanerjee853/Scope-Agent.git`.
 
 The remote was empty at setup. Arjun implemented the minimal shared
@@ -14,7 +15,7 @@ foundation on this branch; its local commit is `c822dc0`. That commit passed
 | --- | --- |
 | `repository.py` | `find_root(path)`, `snapshot(path)`, `validate_citation(source, citation)`, `evidence_status(references, source)`, `changes(before, after)` |
 | `storage.py` | `project_id(root)`, `project_dir(root)`, `project_lock(root, timeout=5)`, `load(root)`, `update(root, change, timeout=5)` |
-| `runner.py` | `run(argv, *, cwd, timeout=20) -> RunResult`; `to_dict()` preserves the captured result |
+| `runner.py` | `run(argv, *, cwd, timeout=20, env=None) -> RunResult`; `to_dict()` preserves the captured result |
 | `learning.py` | `resolve_session`, `start(path, description, session_id=...)`, `checkpoint(path, task_id, note=...)`, `knowledge(path, task_id)`, `version_observation` |
 | `understanding_summary.py` | Pure `summarize(events) -> dict` for the receipt integration |
 
@@ -60,10 +61,12 @@ alter permission grants or convert fixture provenance into a human answer.
 ## Runner and platform limits
 
 The runner accepts a list of arguments and explicit cwd, inherits the caller’s
-environment, uses `shell=False`, supplies no interactive stdin, and enforces a
+environment by default (or accepts an explicit child-only replacement), uses
+`shell=False`, supplies no interactive stdin, and enforces a
 20-second default / 300-second maximum timeout. Each stream is drained separately
-with a 64 KiB returned UTF-8 cap. Nonzero exits, spawn errors, timeouts, truncation
-and incomplete cleanup are represented explicitly. Invalid argv/timeouts and
+with a 64 KiB returned UTF-8 cap. Nonzero exits, spawn errors, timeouts, truncation,
+invalid UTF-8, forced pipe cleanup and incomplete cleanup are represented explicitly.
+Invalid argv/timeouts and
 batch executables are rejected before spawning; Windows can otherwise shell-launch
 `.bat`/`.cmd` files even when shell=False.
 
@@ -152,3 +155,53 @@ Real watcher transport, receipts, launchers, native host hooks, human sessions a
 Windows execution remain pending. No paid model calls, global hooks or model SDKs
 were introduced. Sponsor recommendations are a separate requested document, not
 an implemented change to any of these interfaces.
+
+## Follow-up: debugging recovery and regression verification
+
+Arjun clarified that understanding exists to help people recover control of their
+codebase and escape debug hell. [UNDERSTANDING-PURPOSE.md](UNDERSTANDING-PURPOSE.md)
+records that purpose and the intended hypothesis, probe and repair loop.
+
+The new automated journey runs a disposable retry bug through A1's real APIs.
+It captures two fake charges, retrieves the saved observation in a fresh Python
+process, changes the retry key, and observes one charge with a passing regression.
+A further source check marks the old evidence stale. It also checks that a
+synthetic secret stays excluded and events do not leak into the parent session.
+The observation is explicitly `test_fixture`; no human prediction or consent is
+invented, and the test performs the repair itself rather than claiming autonomous
+diagnosis. The hypothesis/consent workflow and CLI remain A2/A3 dependencies.
+
+Testing found and fixed these evidence defects:
+
+- Invalid UTF-8 could become parseable replacement text and count as a successful
+  run. Forced descendant cleanup could also leave a successful-looking partial
+  observation. Both now set an error even if the direct child exited zero.
+- Inherited Git environment selectors could inspect a different repository.
+  Repository inspection now strips `GIT_*` variables only from its child process;
+  other runner calls retain normal environment inheritance.
+- Unicode separators distorted citation/diff line numbers. Physical source line
+  counting now agrees across capture and saved-state validation. Invalid paths and
+  citation text that disagrees with its structured reference remain unverified.
+- Incomplete baselines/checkpoints could be overwritten, and malformed historical
+  observation statuses could crash knowledge retrieval. Damaged saved evidence is
+  now rejected in place; malformed observation statuses remain `not_verified`.
+
+The follow-up adds 52 tests, including the process-restart debugging journey.
+After explicitly rebuilding and reinstalling the package:
+
+| Environment | Result |
+| --- | --- |
+| macOS arm64, Python 3.14.7, noneditable install | **176 passed, 0 skipped**, 19.84 seconds |
+| macOS arm64, Python 3.11.16, separate noneditable install | **176 passed, 0 skipped**, 19.45 seconds |
+| Isolated exact-S1 archive with current Arjun modules and all 137 Arjun tests; Python 3.11.16 | **566 passed, 0 skipped**, 19.96 seconds |
+| `uv build` | Wheel and source distribution built successfully |
+| Source/install/wheel comparison | All five Arjun modules match both installed interpreters and wheel bytes |
+| CLI help, Git whitespace/ignore checks | Passed |
+
+The two local suites ran concurrently; these runtimes are verification
+measurements, not product performance evidence. The S1 check preserved all 30
+original files from `54f39c769df4603e7bae8fb7b63d823657c15662`, including Soham's
+429 tests, and verified that the overlay and installed modules match this checkout.
+Native Windows and a real human debugging session remain unverified. After the
+checks passed, Arjun explicitly authorized committing and pushing `arjun_branch`.
+That supersedes the earlier no-push instruction. No merge into `main` is authorized.

@@ -7,9 +7,10 @@ Preserve contributor authorship and honest evidence.
 
 - This new repository is `https://github.com/SohamBanerjee853/Scope-Agent`.
 - Arjun explicitly requested branch `arjun_branch` and authorized the initial
-  minimal foundation here because the remote was empty. Commit locally only;
-  Arjun explicitly said not to push yet. Do not merge into main or implement
-  Soham's permission work.
+  minimal foundation here because the remote was empty. Arjun initially requested
+  local commits only, then explicitly authorized committing and pushing
+  `arjun_branch` after the debugging verification. Do not merge into main or
+  implement Soham's permission work.
 - Foundation files freeze after F0: pyproject.toml, uv.lock, __init__.py,
   __main__.py, cli.py, paths.py, log.py, AGENTS.md, README.md, PLAIN.md and
   docs/INTERFACES.md. Record interface proposals before changing shared files.

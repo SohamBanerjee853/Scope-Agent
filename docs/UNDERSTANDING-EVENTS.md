@@ -5,6 +5,10 @@ detail to [INTERFACES.md](INTERFACES.md) without changing its wire or IPC fields
 Only `task_start` and `task_checkpoint` are emitted by A1. The other events below
 are reserved contracts for A2/A3, not claims of completed behavior.
 
+The workflow's purpose is to help a developer recover codebase context and get
+out of debugging loops. See [UNDERSTANDING-PURPOSE.md](UNDERSTANDING-PURPOSE.md)
+for the intended hypothesis, probe and repair flow.
+
 ## Common fields and session identity
 
 Use `scope.log.append(session_id, event, **fields)` and `scope.log.read(session_id)`.
@@ -56,6 +60,9 @@ its initial hash manifest and most recent five checkpoints.
 A reference is `{path, start_line, end_line, sha256, citation}`. Citations use
 `file:line` or `file:start-end` and must resolve to fully included source. A missing
 or excluded file makes evidence `unverified`; a changed hash makes it `stale`.
+The citation text must agree with its path, line range and source hash. Lines use
+physical CRLF, CR or LF boundaries; Unicode paragraph separators inside source
+do not add citation lines.
 Neither means deletion, forgotten knowledge, or a wrong human answer. `added`
 in a checkpoint means newly included source relative to the previous snapshot.
 
@@ -76,7 +83,8 @@ exit code and an explicit error. `timestamp` is the actual start attempt time.
 `execution_timestamp`. It is computed only from captured execution, saved typed
 prediction and current source evidence. JSON true and 1 remain different types.
 Timeouts, nonzero exits, either truncated stream, invalid/missing JSON fields,
-cleanup errors and changed/missing source prevent a verified comparison.
+invalid UTF-8, forced output-pipe cleanup, cleanup errors and changed/missing
+source prevent a verified comparison. A zero exit code alone is insufficient.
 
 `learning.version_observation` keeps the historical `status` but adds a fresh
 `source_status` and `current_status`. An old comparison cannot be reused as
@@ -106,7 +114,7 @@ fields:
   "skipped_checks": [],
   "deferred_tasks": [],
   "revocations": [],
-  "meaning": "Historical source-specific evidence, not general mastery..."
+  "meaning": "Historical debugging evidence tied to source versions, not general mastery..."
 }
 ```
 

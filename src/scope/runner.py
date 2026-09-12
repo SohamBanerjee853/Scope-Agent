@@ -4,6 +4,7 @@ Consent and command classification belong to the calling workflow. This primitiv
 does not grant permission or accept command strings for shell evaluation.
 """
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import math
@@ -63,11 +64,19 @@ class _Capture:
         finally:
             stream.close()
 
-    def snapshot(self) -> tuple[str, bool]:
+    def snapshot(self) -> tuple[str, bool, bool]:
         with self.lock:
+            raw = bytes(self.data)
+            decoding_failed = False
+            try:
+                decoded = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                decoding_failed = True
+                decoded = raw.decode("utf-8", errors="replace")
             # Replacement characters must not expand the returned UTF-8 cap.
-            encoded = bytes(self.data).decode("utf-8", errors="replace").encode("utf-8")
-            return encoded[:MAX_OUTPUT_BYTES].decode("utf-8", errors="ignore"), self.truncated or len(encoded) > MAX_OUTPUT_BYTES
+            encoded = decoded.encode("utf-8")
+            return (encoded[:MAX_OUTPUT_BYTES].decode("utf-8", errors="ignore"),
+                    self.truncated or len(encoded) > MAX_OUTPUT_BYTES, decoding_failed)
 
 
 def _terminate_tree(process: subprocess.Popen) -> bool:
@@ -100,7 +109,13 @@ def _terminate_tree(process: subprocess.Popen) -> bool:
     return success
 
 
-def run(argv: list[str], *, cwd: str | Path, timeout: float = DEFAULT_TIMEOUT) -> RunResult:
+def run(argv: list[str], *, cwd: str | Path, timeout: float = DEFAULT_TIMEOUT,
+        env: Mapping[str, str] | None = None) -> RunResult:
+    """Capture a bounded child run, inheriting the caller's environment by default.
+
+    An explicit env mapping replaces the child's environment without changing
+    os.environ. Callers preserving most variables should pass a filtered copy.
+    """
     if (not isinstance(argv, list) or not argv or len(argv) > 256
             or any(not isinstance(arg, str) or "\0" in arg for arg in argv)
             or not argv[0] or sum(len(arg.encode("utf-8")) for arg in argv) > 128 * 1024):
@@ -117,7 +132,7 @@ def run(argv: list[str], *, cwd: str | Path, timeout: float = DEFAULT_TIMEOUT) -
     options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if _WINDOWS else {"start_new_session": True}
     try:
         process = subprocess.Popen(
-            argv, cwd=directory, shell=False, stdin=subprocess.DEVNULL,
+            argv, cwd=directory, env=env, shell=False, stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, **options,
         )
     except OSError as exc:
@@ -151,6 +166,7 @@ def run(argv: list[str], *, cwd: str | Path, timeout: float = DEFAULT_TIMEOUT) -
     for thread in threads:
         thread.join(max(0, deadline - time.monotonic()))
     if any(thread.is_alive() for thread in threads):
+        error = error or "output pipes required forced cleanup; observation is incomplete"
         cleanup_incomplete |= not _terminate_tree(process)
         deadline = time.monotonic() + 0.5
         for thread in threads:
@@ -160,8 +176,10 @@ def run(argv: list[str], *, cwd: str | Path, timeout: float = DEFAULT_TIMEOUT) -
             error = "output pipes remained open after cleanup; observation is incomplete"
     if any(capture.error for capture in captures):
         error = "output stream read failed"
-    stdout, stdout_truncated = captures[0].snapshot()
-    stderr, stderr_truncated = captures[1].snapshot()
+    stdout, stdout_truncated, stdout_decoding_failed = captures[0].snapshot()
+    stderr, stderr_truncated, stderr_decoding_failed = captures[1].snapshot()
+    if stdout_decoding_failed or stderr_decoding_failed:
+        error = error or "output could not be decoded as complete UTF-8"
     return RunResult(**base, exit_code=process.returncode, stdout=stdout, stderr=stderr,
                      timed_out=timed_out, stdout_truncated=stdout_truncated,
                      stderr_truncated=stderr_truncated, error=error,

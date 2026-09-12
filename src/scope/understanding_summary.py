@@ -18,7 +18,7 @@ _EVENTS = {
 def summarize(events) -> dict:
     result = {value[0]: [] for value in _EVENTS.values()}
     result["meaning"] = (
-        "Historical source-specific evidence, not general mastery. Predictions are not "
+        "Historical debugging evidence tied to source versions, not general mastery. Predictions are not "
         "execution consent or grants. An execution record must be inspected for exit, "
         "timeout, truncation and errors; selection and dispatch do not prove completion. "
         "Current source validity requires a fresh knowledge check."
