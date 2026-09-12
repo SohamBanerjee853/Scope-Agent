@@ -1,65 +1,66 @@
-# A2/A3 parallel work
+# A2/A3 integrated handoff
 
-On September 12, Soham was explicitly assigned A3 while Arjun continues A2.
-The published Arjun tip inspected for this integration is
-`c808a3ba1aebe4deb0180de2bf5e8f85f85cde7f`; it contains A1, without experience.py
-or A2's callable signatures. Integration waits on missing signatures while completing independent portions. This document is
-coordination status, not a newly imposed A2 API.
+Arjun published A2 at `23d96d1`, based on reconciled main `37f4b75`. The user
+asked Soham to pull it and continue A3. It merges normally with Soham's independent
+improvements through `c990f80`; both histories remain intact.
+[A2-API.md](A2-API.md) is the actual contract and supersedes A2-PREPARATION.md.
 
-Arjun subsequently published `6e5a6795f389b14eb09180fa960f6eff07e2a8f7` with
-[A2-PREPARATION.md](A2-PREPARATION.md), proposed check/compare/choose_next/dispatch
-signatures and three fixture tests. It explicitly waits for this main merge
-before A2 implementation. These proposed boundaries inform the next adapter work;
-they do not yet supply a callable engine or final callback/result schemas.
+## CLI and human answers
 
-His follow-up `84a2e7f1a4365da853e636fb02a59c98640cbb1a` adds an integration
-review and direct-question revocation diagnostic, plus LF/CRLF lock-test coverage.
-It still contains no A2 engine. The audit also confirms that successful check/next
-CLI result handling must be implemented alongside the eventual real adapters.
+- `scope check TASK_ID --spec check.json [-C PROJECT] [--json]` calls the real
+  `experience.check`. The spec path belongs to the calling directory; `-C`
+  selects the source and execution project. Fields are question, citations,
+  literal top-level JSON field and argv, with optional shell and timeout.
+- `scope next TASK_ID --smaller INSTRUCTION [--larger INSTRUCTION] [-C PROJECT]
+  [--json]` calls `experience.choose_next`. The caller supplies concrete actions
+  based on evidence; the engine does not invent a diagnosis.
+- Both return saved task/session identity. Start/checkpoint/knowledge use the same
+  source and storage. Revoke uses the shared watcher and retains saved knowledge.
+- Structured adapters use authenticated `ui.ask` for every answer. Only an
+  interactive `scope watch` reads terminal input. Prediction is strict typed JSON
+  with value/reason/optional assistance; consent is separately parsed from literal
+  true/false, and next-task choice is smaller/larger/defer.
+- Exact argv, cwd and offered instructions must fit the bounded prompt or the
+  adapter refuses to ask. Evidence excerpts are escaped, bounded and labeled
+  untrusted. Omitted context cannot become an answer or authorization.
 
-## Available A3 work
+Checks distinguish completed comparisons from skipped/interrupted/not-verified
+outcomes. Both matched and mismatched comparisons are real evidence and exit 0;
+neither establishes the whole repair. Incomplete outcomes exit nonzero. Current
+knowledge uses current_status/source_status; historical results stay historical.
 
-- learning_cli.py calls the existing learning.start/checkpoint/knowledge APIs.
-- `scope revoke` sends the shared revoke IPC operation and records whether the
-  watcher actually confirmed it; historical debugging knowledge is retained.
-- ui.ask(prompt, *, repo, context="", home=None, timeout=105, ...) returns an
-  actual answer plus human_ipc route provenance, or an explicit error. All callers
-  use the authenticated watcher question protocol; only an interactive watcher
-  reads tagged terminal input. Start `scope watch` before asking questions. Shared
-  revoke and shutdown invalidate pending answers through the existing generation
-  guards. ui.show displays bounded escaped text. Injected fixture responses still
-  need explicit test_fixture evidence; a transport route alone proves no human.
-- `scope skill` shows the packaged understanding guidance; `--install` writes
-  `.agents/skills/scope-understand/SKILL.md`, preserving edits, with `--dry-run`.
-- `scope demo --prepare-only DIRECTORY` creates the packaged disposable payment
-  project in a new/empty directory, initializes Git and installs the skill. Each
-  preparation gets its own demo UUID, never an inherited parent session.
-- `scope demo-adapter probe` captures real JSON from the validated bundled bug or
-  exact stable-key repair. It is a narrow demo command, not a general interpreter
-  grant. Source/module injection and arbitrary script changes are refused.
+Next-task selection/defer is a recorded outcome. The CLI explicitly reports
+delivery_status=not_attempted and creates no dispatch event. An instruction on
+stdout is not acknowledged host delivery. A future host adapter needs a real
+delivery acknowledgement before using `experience.dispatch`. Selection, delivery,
+execution, completion and permission remain distinct.
 
-## Waiting on Arjun's branch
+## Rehearsals and packaging
 
-The run_check/run_next adapters deliberately raise DependencyUnavailable. The
-CLI forwards no predicted input or execution to an invented engine. The combined
-scripted rehearsal is also gated before file creation, answers or probe execution.
-This is partial A3, not an A2/A3 completion claim.
+`scope demo --prepare-only DIRECTORY` still prepares only a new/empty directory.
+`scope demo --scripted [--shell posix|powershell] [--json]` owns temporary homes and
+a project and accepts no existing directory. It uses a fresh demo UUID, never a
+parent host session, and labels automated answers and the fixture-authored repair.
 
-When Arjun publishes his work, inspect the real check/next callables, accepted
-probe/reference/request shapes, result schemas and human ask/show callback
-contracts. Adapt the CLI and demo to those APIs without changing his engine to
-fit a guessed interface. Verify prediction is persisted before separately asking
-for probe consent, refusal starts no process, T3 stays rejected, observations
-use real bounded output and current source hashes, and typed JSON stays distinct.
+The combined rehearsal uses the real A2 engine and TCP watcher, saves prediction
+before separate consent, executes actual bounded probes and packaged regressions,
+and produces a combined receipt. A selected instruction is delivered to a
+deterministic fixture inbox and consumed by fixture repair code; that is not
+production coding-host delivery. The permission side verifies a narrow grant,
+two exact hook allows, revocation and a synthetic T3 git-push request that never
+runs. Actual observations and regressions establish only fixture behavior, not
+human understanding, an autonomous coding-agent repair or time saved.
 
-Finish the scripted demo using explicitly labeled fixture callbacks through the
-real A2 engine and TCP watcher: two probes, actual repair, actual tests, one
-narrow scope, two hook allows and a synthetic T3 git-push request. All logs,
-SessionEnd and receipts must share a fresh synthetic demo session. Fixture
-answers prove neither human understanding nor agent-authored repair/time savings.
-Next-task selection/dispatch cannot be reported as completion or a grant.
+The installed checker separately verifies packaged assets, the known bug/repair
+and A1 checkpoints, then runs the combined rehearsal for both shell dialects.
+Installed-resource and permission smoke checks remain in both native CI jobs.
+Validation is recorded in [the reconciliation checkpoint](RECONCILIATION-CHECKPOINT.md).
 
-No A2 learning/experience/runner/storage implementation was edited for A3. The
-existing event contract and pure understanding projection remain Arjun-owned.
-The two-pane launchers, host registration and live/model checks remain separate
-integration work; this parallel handoff does not implement them.
+## Remaining work
+
+Codex/Claude two-pane launchers, native SessionStart registration, readiness,
+launch-owned watcher lifecycle, mailbox fallback and actual host delivery remain
+I1L work. They need the frozen startup contract and coordinated integration,
+followed by startup documentation and native/fake-host evidence. No global hooks,
+model session or sponsor account was installed for A3. Real human prediction/
+consent and live host acceptance remain manual checks.

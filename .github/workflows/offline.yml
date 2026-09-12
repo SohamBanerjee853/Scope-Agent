@@ -65,7 +65,7 @@ jobs:
       - name: Exercise installed permission smoke for both dialects
         run: uv run --no-sync python -I scripts/check-package.py
 
-      - name: Verify installed payment fixture and source checkpoints
+      - name: Verify installed payment fixture and combined A2/A3 rehearsal
         run: uv run --no-sync python -I scripts/check-demo.py
 
       - name: Check the POSIX smoke wrapper

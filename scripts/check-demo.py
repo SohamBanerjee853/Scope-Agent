@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the installed payment fixture, without A2 or a coding host.
+"""Verify the installed payment fixture and combined offline A2/A3 rehearsal.
 
 After ``uv sync --locked --no-editable``, run
 ``uv run --no-sync python -I scripts/check-demo.py``. All project files and
@@ -86,13 +86,13 @@ def fixture_environment(root):
     return environment
 
 
-def run(arguments, *, cwd, environment, expected_exit=0):
+def run(arguments, *, cwd, environment, expected_exit=0, timeout=30):
     # File-backed capture keeps child output out of terminal logs and memory.
     # These commands execute only fixed installed code and generated fixture data.
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
         completed = subprocess.run([sys.executable, "-I", "-B", *arguments], cwd=cwd,
                                    env=environment, stdin=subprocess.DEVNULL,
-                                   stdout=stdout, stderr=stderr, timeout=30, check=False)
+                                   stdout=stdout, stderr=stderr, timeout=timeout, check=False)
         stdout.seek(0)
         stderr.seek(0)
         output = stdout.read(MAX_OUTPUT_BYTES + 1)
@@ -105,8 +105,8 @@ def run(arguments, *, cwd, environment, expected_exit=0):
     return output
 
 
-def cli(arguments, *, cwd, environment):
-    output = run(["-m", "scope", *arguments], cwd=cwd, environment=environment)
+def cli(arguments, *, cwd, environment, timeout=30):
+    output = run(["-m", "scope", *arguments], cwd=cwd, environment=environment, timeout=timeout)
     result = json.loads(output)
     require(isinstance(result, dict), "Offline fixture CLI returned a non-object result")
     return result
@@ -131,6 +131,53 @@ def regression(project, root, environment, *, repaired):
             "Packaged regression did not expose the retry bug and verify the stable-key repair")
     return {"passed": len(cases) - len(failures), "failed": len(failures), "skipped": 0,
             "failure_expected": not repaired}
+
+
+def combined_rehearsals(root, environment):
+    results = []
+    sessions = set()
+    expected_counts = {"requests": 4, "auto_allowed": 2, "allowed_once": 0,
+                       "denied": 0, "hard_asks": 1, "scopes_granted": 1}
+    expected_evidence = {"tasks": 1, "predictions": 2, "executions": 2,
+                         "observations": 2, "next_tasks": 1, "dispatches": 1}
+    for shell in ("posix", "powershell"):
+        report = cli(["demo", "--scripted", "--shell", shell, "--json"], cwd=root,
+                     environment=environment, timeout=120)
+        require(report.get("mode") == "scripted_fixture" and report.get("verified") is True
+                and report.get("provenance") == "test_fixture" and report.get("shell") == shell,
+                "Installed combined rehearsal did not verify as an explicit fixture")
+        session = report.get("session_id")
+        require(isinstance(session, str) and session.startswith("demo-") and session not in sessions,
+                "Combined rehearsals reused or omitted a fresh demo identity")
+        uuid.UUID(session.removeprefix("demo-"))
+        sessions.add(session)
+        require(report.get("temporary_files_removed") is True and report.get("revoked") is True,
+                "Combined rehearsal retained temporary state or unrevoked grants")
+        require(report["receipt"]["counts"] == expected_counts,
+                "Combined receipt does not match actual permission fixture counts")
+        understanding = report["receipt"]["understanding"]
+        require(all(len(understanding[key]) == count for key, count in expected_evidence.items()),
+                "Combined receipt is missing actual understanding evidence")
+        checks = report["checks"]
+        require(len(checks) == 2 and all(record["phase"] == "completed"
+                and record["prediction"]["provenance"] == "test_fixture"
+                and record["approval"]["approved"] is True
+                and record["observation"]["status"] in {"matched", "mismatched"}
+                for record in checks), "Combined checks lack completed, separately approved fixture evidence")
+        observed = [record["observation"]["actual"] for record in checks]
+        require(all(type(value) is int for value in observed) and observed == [2, 1],
+                "Combined engine did not capture the actual duplicate-charge repair")
+        regressions = [{key: item[key] for key in ("passed", "failed")} for item in report["regressions"]]
+        require(regressions == [{"passed": 2, "failed": 1}, {"passed": 3, "failed": 0}],
+                "Combined rehearsal did not verify actual packaged regressions")
+        require(report["patch"]["inbox_consumed"] is True and report["handoff"]["status"] == "dispatched",
+                "Fixture repair did not consume its acknowledged fixture-inbox handoff")
+        results.append({"shell": shell, "session_id": session, "observed_charge_counts": observed,
+                        "regressions": regressions, "permission_counts": expected_counts,
+                        "understanding_counts": {key: len(understanding[key]) for key in expected_evidence},
+                        "delivery": "deterministic fixture inbox, not a coding host",
+                        "revoked": True, "temporary_files_removed": True})
+    return results
 
 
 def verify():
@@ -199,12 +246,14 @@ def verify():
                   "a1": {"task_id": task["task_id"], "source_repair_captured": True,
                          "saved_understanding_observations": 0,
                          "events": [event["event"] for event in events]}}
+        result["combined_rehearsals"] = combined_rehearsals(root, environment)
     require(not root.exists(), "Offline fixture temporary project or homes remain")
     result["temporary_files_removed"] = True
     result["limits"] = ("Offline fixture only: the local bundled payment code and regression tests actually ran. "
-                        "No human prediction, execution-consent flow, permission grant, A2 check/next, model, "
-                        "network service, native hook, or host launcher was exercised. Fixture subprocess results "
-                        "are not saved understanding observations or evidence of human mastery.")
+                        "The separate A1 fixture has no saved understanding observations. Combined rehearsals "
+                        "exercise A2/A3 with labeled fixture predictions, separate consent, watcher grants and "
+                        "fixture-inbox delivery. No human answers, coding-host delivery, model, network service, "
+                        "native host interception or launcher was exercised; no human mastery is established.")
     return result
 
 

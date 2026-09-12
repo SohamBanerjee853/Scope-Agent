@@ -20,8 +20,11 @@ host or claim that anyone has answered a question.
 For a human debugging session, start Scope's task record before editing. Have the
 current agent explain the relevant code and cite the current source lines. Give
 your own concrete prediction and reason, then separately decide whether to run
-the proposed probe. If the A2 check/next workflow is unavailable, stop that part
-of the rehearsal and report the missing dependency; never fabricate its events.
+the proposed probe. `scope check TASK_ID --spec check.json` uses the real engine
+and an interactive `scope watch` with the same SCOPE_HOME. The spec supplies the
+question, current citations, literal JSON output field and exact argv. Use
+`scope check --help` and the installed understanding skill for the full shape.
+Cancelled or missing answers cannot run a probe; never fabricate their events.
 
 These local commands can be used from either POSIX or PowerShell when the Python
 environment has pytest installed:
@@ -56,3 +59,8 @@ evidence. Scripted success does not establish human understanding or time saved.
 A synthetic `git push` permission request may demonstrate a hard ask; it must
 never execute a push. Broad Python or interpreter permission cards are unsuitable;
 the packaged `scope demo-adapter` family supplies a narrow demonstration seam.
+
+The complete `scope demo --scripted --json` rehearsal creates its own temporary
+project and homes; it does not run against this working directory. It labels
+automated answers and the repair as fixtures and returns its combined receipt.
+Use your own prediction and separate consent for the human workflow above.

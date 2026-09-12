@@ -9,10 +9,12 @@ to other clones.
 ## Current coordination
 
 Soham owns permissions, A3 CLI/UI,
-understanding skill/demo work and reconciliation into main. Arjun is working on
-A2's prediction/consent/observation and next-task engine in learning.py and
-experience.py. Do not invent his unfinished APIs or overwrite his work. Review
-origin/arjun_branch for published changes; record missing A2 calls as pending.
+understanding skill/demo work and reconciliation into main. Arjun published A2's
+prediction/consent/observation and next-task engine at 23d96d1 in learning.py and
+experience.py. Use its actual docs/A2-API.md contract; preserve his implementation
+and review origin/arjun_branch for further changes. A3 uses that engine through
+authenticated watcher callbacks. CLI next-task selection does not claim delivery
+to a coding host. Planned host launchers and acknowledged delivery remain I1L.
 Preserve both feature histories and branches. No force
 push, history rewrite or destructive reset. Work in integration/scope for shared
 reconciliation, test it, then merge normally into main when the requested scope

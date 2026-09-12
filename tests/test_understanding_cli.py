@@ -111,27 +111,12 @@ def test_task_cli_requires_exactly_one_task_identifier(command, repo):
         assert error.value.code == 2
 
 
-@pytest.mark.parametrize("command", ["start", "checkpoint", "knowledge", "revoke", "skill"])
+@pytest.mark.parametrize("command", ["start", "checkpoint", "knowledge", "revoke", "skill", "check", "next"])
 def test_a3_command_help_is_available_without_state(command, capsys):
     with pytest.raises(SystemExit) as error:
         learning_cli.main([command, "--help"])
     assert error.value.code == 0
     assert "scope " + command in capsys.readouterr().out
-
-
-@pytest.mark.parametrize("command", ["check", "next"])
-def test_a2_adapters_fail_explicitly_without_guessing_engine_api(command, monkeypatch, capsys):
-    def forbidden(*args, **kwargs):
-        pytest.fail("pending A2 command must not execute or create evidence")
-
-    monkeypatch.setattr(learning, "start", forbidden)
-    monkeypatch.setattr(learning, "checkpoint", forbidden)
-    assert learning_cli.main([command, "--task", "fixture", "--json"]) == 1
-    output = capsys.readouterr()
-    assert output.out == ""
-    assert "pending Arjun's A2" in output.err
-    assert learning_cli.main([command, "--help"]) == 0
-    assert "No engine API is guessed" in capsys.readouterr().out
 
 
 def test_invalid_repo_task_and_launch_identity_fail_honestly(repo, tmp_path, monkeypatch, capsys):

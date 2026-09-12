@@ -1,11 +1,4 @@
-"""Understanding commands over the established A1 and human transport seams.
-
-A2 owns prediction/consent/comparison and next-task selection. Its callable
-signatures are not yet available on the inspected Arjun branch. ``run_check``
-and ``run_next`` are explicit adapters awaiting that handoff, not substitute
-implementations. They must eventually pass human ask/show callbacks to the real
-A2 engine and leave probe execution in that caller-side engine.
-"""
+"""Understanding commands over the real A1/A2 engine and human watcher seams."""
 
 from __future__ import annotations
 
@@ -20,27 +13,41 @@ from typing import Callable
 from .watch_ui import display_text
 
 MAX_SKILL_BYTES = 128 * 1024
+MAX_SPEC_BYTES = 128 * 1024
 SKILL_PARTS = ("skills", "scope-understand", "SKILL.md")
-A2_ADAPTER_REQUIREMENTS = (
-    "Await Arjun's tested experience.py check and next-task callable signatures, "
-    "their request/result schemas, and ask/show callback contracts. The adapter "
-    "must preserve prediction-before-consent ordering, caller-side execution, "
-    "T3 rejection, distinct provenance and cancellation. No engine API is guessed."
-)
-
-
-class DependencyUnavailable(RuntimeError):
-    """A required milestone has not supplied its reviewed callable contract."""
 
 
 def run_check(argv: list[str]) -> dict:
-    """A3 adapter entry point; wire only after A2's real check API is supplied."""
-    raise DependencyUnavailable("check is pending Arjun's A2 prediction/consent API")
+    """Run a fresh A2 check with independently parsed prediction and consent."""
+    from . import experience, learning, ui
+
+    parser = _parser("check")
+    args = parser.parse_args(argv)
+    task_id = _task(args, parser)
+    with args.spec.open("rb") as stream:
+        payload = stream.read(MAX_SPEC_BYTES + 1)
+    if len(payload) > MAX_SPEC_BYTES:
+        raise ValueError("check spec exceeds 128 KiB")
+    spec = ui.parse_json(payload.decode("utf-8", errors="strict"), maximum=MAX_SPEC_BYTES)
+    task = learning.read_task(args.cwd, task_id)
+    record = experience.check(args.cwd, task_id, spec, ask=ui.answer_request,
+                              show=ui.show_request, provenance="human_ipc")
+    return {**record, "task_id": task_id, "session_id": task["session_id"]}
 
 
 def run_next(argv: list[str]) -> dict:
-    """A3 adapter entry point; wire only after A2's real next-task API is supplied."""
-    raise DependencyUnavailable("next is pending Arjun's A2 next-task API")
+    """Save the human's selected next instruction without inventing delivery."""
+    from . import experience, learning, ui
+
+    parser = _parser("next")
+    args = parser.parse_args(argv)
+    task_id = _task(args, parser)
+    task = learning.read_task(args.cwd, task_id)
+    result = experience.choose_next(args.cwd, task_id, smaller=args.smaller, larger=args.larger,
+                                    ask=ui.answer_request, show=ui.show_request, provenance="human_ipc")
+    return {**result, "task_id": task_id, "session_id": task["session_id"],
+            "delivery_status": "not_attempted",
+            "delivery_reason": "This CLI saves selection only. Printing an instruction is not acknowledged agent delivery."}
 
 
 def skill_text() -> str:
@@ -126,13 +133,23 @@ def _parser(command: str) -> argparse.ArgumentParser:
         parser.description = "Capture source evidence for a debugging task. No probe runs."
         parser.add_argument("description", nargs="+")
         parser.add_argument("--session", help="explicit session; otherwise CODEX_THREAD_ID or a new task ID")
-    elif command in {"checkpoint", "knowledge"}:
-        parser.description = ("Capture bounded source changes for this task." if command == "checkpoint" else
-                              "Inspect saved observations against current source evidence.")
+    elif command in {"checkpoint", "knowledge", "check", "next"}:
+        parser.description = {
+            "checkpoint": "Capture bounded source changes for this task.",
+            "knowledge": "Inspect saved observations against current source evidence.",
+            "check": "Save a human prediction, separately request consent, then run one caller-side probe. Requires scope watch.",
+            "next": "Ask the human to select an agent-supplied instruction or defer. Saves selection without claiming delivery.",
+        }[command]
         parser.add_argument("task_id", nargs="?")
         parser.add_argument("--task", dest="task_option", help="task ID (alternative to the positional argument)")
         if command == "checkpoint":
             parser.add_argument("--note", default="")
+        elif command == "check":
+            parser.add_argument("--spec", required=True, type=Path,
+                                help="UTF-8 JSON file: question, citations, field, argv; optional shell and timeout. File is read relative to the calling directory.")
+        elif command == "next":
+            parser.add_argument("--smaller", required=True, help="complete smaller next-task instruction")
+            parser.add_argument("--larger", help="optional complete larger next-task instruction")
     elif command == "revoke":
         parser.description = "Clear watcher grants and pending answers; retain saved debugging evidence."
         parser.add_argument("--session")
@@ -168,6 +185,24 @@ def _display(command, result):
             print("  " + display_text(observation.get("current_status", "not_verified")) + ": " +
                   display_text(observation.get("reason", "inspect --json for evidence")))
         print(display_text(result["meaning"]))
+    elif command == "check":
+        print("Check " + display_text(result["check_id"]) + ": " + display_text(result["phase"]))
+        if result["phase"] == "completed":
+            observation = result["observation"]
+            print("Observation: " + display_text(observation["status"]))
+            print(display_text(observation["reason"]))
+        else:
+            print(display_text(result.get("reason", "No verified observation was recorded.")))
+        print("Session " + display_text(result["session_id"]) + "; inspect scope knowledge --json for saved evidence.")
+        print("A completed check is a recorded comparison, not proof of repair, understanding or permission.")
+    elif command == "next":
+        print("Next task: " + display_text(result["status"]))
+        if result["status"] == "selected":
+            print("Saved " + display_text(result["choice"]) + " choice " + display_text(result["handoff_id"]))
+            print("Instruction (untrusted): " + display_text(result["instruction"]))
+        else:
+            print(display_text(result["reason"]))
+        print(display_text(result["delivery_reason"]))
     elif command == "revoke":
         print(display_text(result["reason"]))
         print(display_text(result["meaning"]))
@@ -185,16 +220,6 @@ def main(argv: list[str] | None = None) -> int:
         print("scope understanding: command required", file=sys.stderr)
         return 1
     command, trailing = arguments[0], arguments[1:]
-    if command in {"check", "next"}:
-        if trailing == ["--help"] or trailing == ["-h"]:
-            print("scope " + command + ": " + A2_ADAPTER_REQUIREMENTS)
-            return 0
-        try:
-            (run_check if command == "check" else run_next)(trailing)
-        except DependencyUnavailable as error:
-            print("scope " + command + ": " + str(error), file=sys.stderr)
-            return 1
-        raise RuntimeError("A2 adapter returned without an implemented CLI result contract")
     try:
         parser = _parser(command)
     except ValueError:
@@ -202,7 +227,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     args = parser.parse_args(trailing)
     try:
-        if command == "skill":
+        if command == "check":
+            result = run_check(trailing)
+        elif command == "next":
+            result = run_next(trailing)
+        elif command == "skill":
             if args.dry_run and not args.install:
                 parser.error("--dry-run requires --install")
             if not args.install:
@@ -228,6 +257,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=True, allow_nan=False))
         else:
             _display(command, result)
+        if command == "check":
+            return 0 if (result["phase"] == "completed" and
+                         result["observation"]["status"] in {"matched", "mismatched"}) else 1
         return 0 if command != "revoke" or result["revoked"] is True and result["recorded"] else 1
     except Exception as error:
         print("scope " + command + ": " + display_text(str(error)), file=sys.stderr)

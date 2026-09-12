@@ -173,3 +173,67 @@ constructed stat records have no native file-attribute value. The installer now
 rejects nonregular files before inspecting Windows reparse metadata; regular
 reparse files are still refused. No fixture or rejection assertion was weakened.
 The full corrected local suite passed **1,256 tests, 0 skipped**, in 54.98 seconds.
+
+## Arjun A2 pull and completed A3 adapters
+
+Arjun's published A2 tip is `23d96d1`, based on `37f4b75`. It merged
+without conflicts into integration/scope after Soham's `c990f80` improvements.
+All six Arjun production modules remain byte-identical to that A2 tip; his
+273 new engine tests and actual [API contract](A2-API.md) are retained.
+
+`check TASK_ID --spec FILE` now calls the real engine. Its watcher adapter parses
+strict typed prediction JSON, separately accepts only literal true/false consent,
+and shows exact argv/cwd before asking. Oversized essential details are refused,
+not truncated into a different approval. Context is bounded and untrusted.
+Checks include the saved task/session identity, and distinguish observed matches
+or mismatches from skipped, interrupted and not-verified results.
+
+`next TASK_ID --smaller INSTRUCTION [--larger INSTRUCTION]` records the person's
+choice or deferral. Production CLI delivery is explicitly not_attempted and emits
+no dispatch event. Displaying an instruction does not claim host acknowledgement,
+execution, completion or a permission grant. The companion skill and current
+documentation now teach the available commands rather than pending placeholders.
+
+The combined `demo --scripted` owns its project and configuration homes, including
+user/Git configuration locations. It ignores a parent Git configuration that
+excludes Python files and preserves the parent's files. Both dialects use real
+A2 checks, the real TCP watcher with labeled fixture answers, and the actual
+installed `scope demo-adapter probe` argv. Each exact hook allow is linked to its
+real check. The fixture inbox acknowledges and consumes a selected instruction
+before the exact bundled repair; it is not a live coding-agent delivery adapter.
+
+Observed combined report/receipt excerpt for each dialect:
+
+| Evidence | Actual result |
+| --- | --- |
+| Bounded probe charge_count | 2 before repair, 1 after |
+| Packaged regressions, verified by JUnit cases | 1 expected failure / 2 passes, then 3 passes; no skips |
+| Permission receipt | requests 4, auto_allowed 2, allowed_once 0, denied 0, hard_asks 1, scopes_granted 1 |
+| Understanding receipt | 1 task, 2 predictions, 2 executions, 2 observations, 1 next task, 1 fixture dispatch |
+| Cancellation/lifecycle | revoke with 1 unused grant unit; synthetic SessionEnd; temporary project/homes removed |
+
+The same fresh demo UUID binds all rehearsal events and the receipt. The synthetic
+git-push request never executes. Fixtures prove neither human understanding,
+agent-authored repair nor time savings. Real human questions use tagged terminal
+input; the scripted demo's injected watcher UI uses explicitly labeled fixture
+answers. Both routes use authenticated TCP. A started probe remains bounded by
+the caller-side runner; revoke does not kill an already running probe.
+
+The noneditable installed checker now runs the separate A1 fixture plus both
+combined dialect rehearsals and verifies actual evidence/counts/provenance.
+The build, installed resource checks, both permission smokes and both combined
+rehearsals passed locally. Skill frontmatter, UTF-8, local Markdown links and
+source-archive inclusion/exclusion passed. Final full-suite and hosted results
+follow in the merge handoff; native host/model/human acceptance remains separate.
+
+Remaining coordinated work is I1L: two-pane host launchers, native identity and
+readiness, launch-owned watcher/receipt lifecycle, mailbox fallback and actual
+host delivery; then startup documentation and human acceptance. No global hooks,
+live coding host, paid model work or sponsor account was installed by this merge.
+
+Final local validation from a fresh noneditable Python 3.11.16 installation:
+**1,588 passed, 0 skipped**, in 194.15 seconds. An earlier source-based run
+overlapped the final fixture-home edit, so its parent and child loaded different
+fixture definitions and two context guards refused the run; the fixed installed
+snapshot above passed all cases. This records actual suite runtime, not an agent
+benchmark. Hosted macOS/Windows validation is pending at this commit.

@@ -7,12 +7,12 @@ in the terminal, and allow matching requests for a limited budget and lifetime.
 Revocation stops reuse. Destructive or publishing commands remain native hard asks.
 The watcher asks questions and carries decisions; it never runs probe commands.
 
-The understanding workflow is being built around a debugging loop: recover the
+The understanding workflow follows a debugging loop: recover the
 relevant source, explain a hypothesis, ask the person to predict a concrete result,
 request separate consent for a probe, inspect the real output and choose the next
-small repair. Source snapshots, task storage, a bounded runner and receipt
-projection exist. Arjun is implementing the prediction/consent engine while Soham
-adds the CLI, companion skill and disposable payment example.
+small repair. `scope check` connects the saved task to the prediction, consent and
+probe engine through the review terminal. `scope next` saves the person's chosen
+action or deferral; it does not claim automatic delivery to a coding host.
 
 A saved prediction is not execution permission. An allow is not proof that a
 command ran. A selected next task is not a completed repair, and a correct answer
@@ -24,7 +24,9 @@ requested commands and demonstrates no human understanding or time savings.
 
 The installed payment-fixture check also runs the real fake-payment code and its
 regressions before and after the stable-key repair. It verifies the packaged demo
-and saved source context while the A2 prediction/consent engine is still pending.
+and saved source context. The combined `scope demo --scripted` rehearsal adds the
+actual prediction/consent engine, watcher, permission decisions and receipt using
+explicitly labeled fixture answers. It still proves no human understanding.
 Optional Exa guidance lets the current host explain a public command concept with
 a source link; an explanation never changes Scope's permission decision.
 

@@ -5,12 +5,11 @@ approve a narrow command scope with a finite budget; matching requests reuse it
 until expiry or revocation. Dangerous T3 commands, including every `git push`,
 still fall back to the host's native approval flow.
 
-The repository also contains Arjun's source snapshots, persistent task context,
-bounded probe runner and historical understanding projection. Soham is adding
-A3's CLI, skill and disposable demo while Arjun develops A2's prediction and
-separate execution-consent workflow. See the owner and integration checkpoints
-under docs for the exact implemented state. The `scope codex` and `scope claude`
-two-pane launchers are planned and remain unavailable.
+The debugging workflow captures source context, asks for a concrete prediction,
+separately requests consent to run a bounded probe, and compares the actual result
+against that source version. It saves the evidence and lets the person choose a
+next debugging action. The `scope codex` and `scope claude` two-pane launchers are
+planned and remain unavailable.
 
 Permission is not proof of execution. Predictions are not consent or mastery.
 Scope supplements the host's sandbox and approval controls. It uses your existing
@@ -88,7 +87,7 @@ and optional `--home PATH`. Native answers and unobserved execution stay unknown
 
 ## Debugging context and disposable demo
 
-These A3 commands use Arjun's implemented A1 APIs:
+Start a task before editing and recover its source context with these commands:
 
 ```text
 uv run scope start "Investigate the retry behavior" --json
@@ -116,11 +115,65 @@ prepared project, `scope demo-adapter probe` runs only the bundled fixture or th
 exact repair and prints actual JSON; it uses no payment service. The packaged
 retry regression intentionally fails before the repair and passes afterward.
 
-`scope check`, `scope next`, and `scope demo --scripted` currently report an
-explicit pending A2 dependency. They do not invent predictions or execute a
-substitute consent workflow. Arjun's published branch has not supplied those
-callable signatures yet. [A2/A3 coordination](docs/A2-A3-COORDINATION.md) records
-what can be wired when he publishes them.
+To check a hypothesis, save a JSON spec with the exact probe argv and citations
+from the current project. For the prepared payment project, the shape is:
+
+```json
+{
+  "question": "How many charges will this order produce after the retry, and why?",
+  "citations": ["payment.py:29-31", "payment.py:34-41"],
+  "field": "charge_count",
+  "argv": ["/absolute/path/to/Scope-Agent/.venv/bin/python", "-I", "-B", "payment.py"],
+  "shell": "posix",
+  "timeout": 20
+}
+```
+
+Replace the Python path with your actual executable. Windows uses the original
+checkout's `.venv/Scripts/python.exe` path and `"shell": "powershell"`; forward
+slashes are valid in its JSON path. Argv is a list of literal arguments, not a
+shell command. `field` is a literal top-level JSON key. Save the spec as
+`check.json` in the Scope checkout, then use the task ID returned by `start` for
+the same demo project:
+
+```text
+uv run scope start "Investigate payment retry identity" -C ../scope-payment-demo --json
+uv run scope check TASK_ID --spec check.json -C ../scope-payment-demo --json
+uv run scope next TASK_ID --smaller "Inspect how retry_key changes across attempts" --larger "Review retry identity across callers" -C ../scope-payment-demo --json
+```
+
+Keep `scope watch` open in a separate interactive terminal using the same
+SCOPE_HOME. Its tagged prediction prompt expects a JSON object with `value`, a
+nonempty `reason`, and optional `assistance`; enter your own prediction. The
+separate consent prompt accepts literal `true` or `false`. A transport reply or
+an explanation never supplies consent. The next-task prompt accepts `smaller`,
+`larger` when offered, or `defer`.
+
+Checks return the saved task/session identity and the actual engine record.
+`matched` and `mismatched` both represent an observed comparison; neither proves
+the whole repair. Skipped, interrupted and `not_verified` checks exit nonzero.
+The next command saves the selected instruction or deferral; it explicitly
+reports delivery as not attempted. It does not claim that printing an instruction
+delivered it to a host, executed it, or granted permission. Shared revoke cancels
+pending answers and grants; it does not kill a probe that already started.
+
+Run the complete automated rehearsal without selecting a user directory:
+
+```text
+uv run scope demo --scripted --json
+uv run scope demo --scripted --shell powershell --json
+```
+
+The rehearsal runs pytest from the same environment; the default `uv sync`
+above installs that development dependency. A runtime-only package installation
+must also provide pytest before running the scripted regression checks.
+
+It uses a disposable project and new session, fixture predictions and separate
+consent through the real watcher, two actual probes, a fixture-authored repair,
+regression tests and a combined receipt. The permission demonstration has one
+narrow grant, two exact hook allows, revocation and a synthetic T3 request that
+never executes a push. Fixture success is not human understanding, an autonomous
+coding-agent repair or a live host test. See [the A2/A3 handoff](docs/A2-A3-COORDINATION.md).
 
 For the available payment probe, stay in the original Scope checkout and run:
 
@@ -157,8 +210,10 @@ uv run --no-sync python -I scripts/check-demo.py
 The first check validates resources and the permission smoke. The second prepares
 a disposable payment project through the installed CLI, observes the real bug and
 the exact stable-key repair, and checks actual regression outcomes. It exercises
-A1 task checkpoints, with no human answers, A2 consent workflow or model session.
-Both checks run in macOS/Windows CI. `uv sync --locked` restores editable development.
+A1 task checkpoints, then the combined A2/A3 rehearsal for both shell dialects.
+Its consent, predictions and inbox delivery are explicitly fixtures; it calls no
+model or coding host. Both checks run in macOS/Windows CI.
+`uv sync --locked` restores editable development.
 
 If make is available, `make setup`, `make test`, `make build`, `make smoke` and
 `make check-installed` wrap these commands. Smoke selects the PowerShell wrapper
